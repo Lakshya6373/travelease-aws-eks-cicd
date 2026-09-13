@@ -1,8 +1,7 @@
 # TravelEase — AI-Powered Travel Booking on AWS EKS
 
-<!-- TODO: Replace YOUR-GITHUB-USERNAME below with your real GitHub username -->
-[![CI](https://github.com/YOUR-GITHUB-USERNAME/travelease-aws-eks-cicd/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR-GITHUB-USERNAME/travelease-aws-eks-cicd/actions/workflows/ci.yml)
-[![CD](https://github.com/YOUR-GITHUB-USERNAME/travelease-aws-eks-cicd/actions/workflows/cd-pipeline.yml/badge.svg)](https://github.com/YOUR-GITHUB-USERNAME/travelease-aws-eks-cicd/actions/workflows/cd-pipeline.yml)
+[![CI](https://github.com/Lakshya6373/travelease-aws-eks-cicd/actions/workflows/ci.yml/badge.svg)](https://github.com/Lakshya6373/travelease-aws-eks-cicd/actions/workflows/ci.yml)
+[![CD](https://github.com/Lakshya6373/travelease-aws-eks-cicd/actions/workflows/cd-pipeline.yml/badge.svg)](https://github.com/Lakshya6373/travelease-aws-eks-cicd/actions/workflows/cd-pipeline.yml)
 
 A production-grade travel booking platform built with Spring Boot, deployed across **3 isolated AWS EKS environments** (dev / test / prod) with Bedrock AI recommendations, full observability, WAF, and GitOps-style environment promotion.
 
