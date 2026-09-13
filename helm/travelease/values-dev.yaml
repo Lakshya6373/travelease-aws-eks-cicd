@@ -1,16 +1,21 @@
 # Dev overrides — WAF disabled, 1 replica
 replicaCount: 1
 
+image:
+  repository: "892978057052.dkr.ecr.ap-south-1.amazonaws.com/travelease"
+  tag: "v1.0"
+  pullPolicy: IfNotPresent
+
 env:
   SPRING_PROFILES_ACTIVE: "dev"
   RECOMMENDATION_ENABLED: "true"
 
 serviceAccount:
-  bedrockRoleArn: ""  # Replace with: terraform output -raw bedrock_role_arn (from dev env)
+  bedrockRoleArn: "arn:aws:iam::892978057052:role/dev-bedrock-irsa"
 
 ingress:
   wafAclArn: ""  # WAF disabled in dev
-  accessLogsBucket: ""  # Replace with: terraform output -raw access_logs_bucket (from dev env)
+  accessLogsBucket: "travelease-dev-alb-logs-892978057052"
 
 autoscaling:
   minReplicas: 1

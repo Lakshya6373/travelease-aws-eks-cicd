@@ -78,64 +78,84 @@ resource "aws_glue_catalog_table" "alb_logs" {
 
     # ALB access log columns per AWS documentation
     columns {
-      name = "type"             ; type = "string"
+      name = "type"
+      type = "string"
     }
     columns {
-      name = "time"             ; type = "string"
+      name = "time"
+      type = "string"
     }
     columns {
-      name = "elb"              ; type = "string"
+      name = "elb"
+      type = "string"
     }
     columns {
-      name = "client_ip"        ; type = "string"
+      name = "client_ip"
+      type = "string"
     }
     columns {
-      name = "client_port"      ; type = "int"
+      name = "client_port"
+      type = "int"
     }
     columns {
-      name = "target_ip"        ; type = "string"
+      name = "target_ip"
+      type = "string"
     }
     columns {
-      name = "target_port"      ; type = "int"
+      name = "target_port"
+      type = "int"
     }
     columns {
-      name = "request_processing_time" ; type = "double"
+      name = "request_processing_time"
+      type = "double"
     }
     columns {
-      name = "target_processing_time"  ; type = "double"
+      name = "target_processing_time"
+      type = "double"
     }
     columns {
-      name = "response_processing_time" ; type = "double"
+      name = "response_processing_time"
+      type = "double"
     }
     columns {
-      name = "elb_status_code"  ; type = "int"
+      name = "elb_status_code"
+      type = "int"
     }
     columns {
-      name = "target_status_code" ; type = "string"
+      name = "target_status_code"
+      type = "string"
     }
     columns {
-      name = "received_bytes"   ; type = "bigint"
+      name = "received_bytes"
+      type = "bigint"
     }
     columns {
-      name = "sent_bytes"       ; type = "bigint"
+      name = "sent_bytes"
+      type = "bigint"
     }
     columns {
-      name = "request_verb"     ; type = "string"
+      name = "request_verb"
+      type = "string"
     }
     columns {
-      name = "request_url"      ; type = "string"
+      name = "request_url"
+      type = "string"
     }
     columns {
-      name = "request_proto"    ; type = "string"
+      name = "request_proto"
+      type = "string"
     }
     columns {
-      name = "user_agent"       ; type = "string"
+      name = "user_agent"
+      type = "string"
     }
     columns {
-      name = "ssl_cipher"       ; type = "string"
+      name = "ssl_cipher"
+      type = "string"
     }
     columns {
-      name = "ssl_protocol"     ; type = "string"
+      name = "ssl_protocol"
+      type = "string"
     }
   }
 }

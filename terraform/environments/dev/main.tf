@@ -1,12 +1,17 @@
 terraform {
   required_version = ">= 1.11"
   required_providers {
-    aws = { source = "hashicorp/aws"; version = "~> 5.60" }
-    tls = { source = "hashicorp/tls"; version = "~> 4.0" }
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.60"
+    }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
   }
   backend "s3" {
-    # FIXME: Replace <YOUR-UNIQUE-SUFFIX> with the bucket_name output from terraform/bootstrap
-    bucket       = "travelease-terraform-state-<YOUR-UNIQUE-SUFFIX>"
+    bucket       = "travelease-tfstate-892978057052"
     key          = "dev/terraform.tfstate"
     region       = "ap-south-1"
     encrypt      = true

@@ -1,11 +1,17 @@
 terraform {
   required_version = ">= 1.11"
   required_providers {
-    aws = { source = "hashicorp/aws"; version = "~> 5.60" }
-    tls = { source = "hashicorp/tls"; version = "~> 4.0" }
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.60"
+    }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
   }
   backend "s3" {
-    bucket       = "travelease-terraform-state-<YOUR-UNIQUE-SUFFIX>"
+    bucket       = "travelease-tfstate-892978057052"
     key          = "test/terraform.tfstate"
     region       = "ap-south-1"
     encrypt      = true

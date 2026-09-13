@@ -3,6 +3,7 @@ package ai.travelease.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 
@@ -16,6 +17,9 @@ import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
  * Credentials come from the default AWS SDK credential chain:
  *   - Locally: ~/.aws/credentials or environment variables (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)
  *   - In-cluster: IRSA (IAM Role for Service Account), automatically injected by the EKS pod identity webhook
+ *
+ * Uses UrlConnectionHttpClient explicitly to avoid Apache HttpClient 5 version conflicts
+ * with Spring Boot's managed dependency on the same library.
  */
 @Configuration
 public class BedrockConfig {
@@ -27,6 +31,7 @@ public class BedrockConfig {
     public BedrockRuntimeClient bedrockRuntimeClient() {
         return BedrockRuntimeClient.builder()
                 .region(Region.of(bedrockRegion))
+                .httpClient(UrlConnectionHttpClient.builder().build())
                 // Credentials resolved automatically from the SDK default chain
                 .build();
     }

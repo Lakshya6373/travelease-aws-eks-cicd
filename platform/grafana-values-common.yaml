@@ -9,6 +9,10 @@ grafana:
     analytics:
       check_for_updates: false
 
+prometheusOperator:
+  admissionWebhooks:
+    enabled: false
+
 prometheus:
   prometheusSpec:
     retention: 3d
@@ -16,6 +20,13 @@ prometheus:
     serviceMonitorSelectorNilUsesHelmValues: false
     serviceMonitorSelector: {}
     serviceMonitorNamespaceSelector: {}
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
 
   # Use PVC only on prod; set to false for dev/test in per-cluster overrides
   persistence:
@@ -24,6 +35,15 @@ prometheus:
 loki:
   persistence:
     enabled: false
+  datasource:
+    isDefault: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
 
 # Promtail extra config for system (journal) logs
 promtail:

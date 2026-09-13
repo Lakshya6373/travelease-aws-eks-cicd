@@ -1,45 +1,67 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <head th:replace="~{fragments/header :: head('Create Account — TravelEase')}"></head>
-<body class="page-auth">
+<body>
 
 <nav th:replace="~{fragments/header :: nav}"></nav>
 
-<main class="auth-main">
+<main class="auth-page">
   <div class="auth-card">
-    <div class="auth-logo">🌍</div>
-    <h1 class="auth-title">Start Exploring</h1>
-    <p class="auth-subtitle">Create your free TravelEase account</p>
+    <div class="auth-logo">
+      <svg class="brand-mark-svg" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 40px; height: 40px;">
+        <circle cx="19" cy="19" r="18" fill="rgba(232,57,42,0.08)" stroke="#E2E8F0" stroke-width="0.8"/>
+        <path d="M7 23.5 C9 15.5 17 9.5 28 8 L16 19.5 L7 23.5 Z" fill="#0066ff"/>
+        <path d="M32 6.5 L12 21.5 L19.5 23 L32 6.5 Z" fill="#ff385c"/>
+        <path d="M32 6.5 L19.5 23 L22 30.5 L26 23.5 L32 6.5 Z" fill="#dc2626"/>
+        <circle cx="32" cy="6.5" r="2.2" fill="#ffd166"/>
+      </svg>
+      <div class="nav-brand-text">
+        Travel<span class="brand-accent">Ease</span>
+        <span class="nav-brand-badge">AI</span>
+      </div>
+    </div>
+
+    <h1 class="auth-title">Create an Account</h1>
+    <p class="auth-subtitle">Join over 500,000+ travelers unlocking VIP rates and AI perks</p>
 
     <!-- Registration error -->
-    <div th:if="${registerError}" class="alert alert-error" th:text="${registerError}"></div>
+    <div th:if="${registerError}" class="alert alert-error">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span th:text="${registerError}"></span>
+    </div>
 
-    <form id="register-form" th:action="@{/register}" method="post" class="auth-form">
+    <form id="register-form" th:action="@{/register}" method="post">
       <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
 
       <div class="form-group">
         <label for="name" class="form-label">Full Name</label>
-        <input type="text" id="name" name="name" class="form-input"
-               placeholder="Jane Doe" required autocomplete="name" />
+        <input type="text" id="name" name="name" class="form-control"
+               placeholder="Alex Johnson" required autocomplete="name" />
       </div>
 
       <div class="form-group">
         <label for="email" class="form-label">Email Address</label>
-        <input type="email" id="email" name="email" class="form-input"
-               placeholder="you@example.com" required autocomplete="email" />
+        <input type="email" id="email" name="email" class="form-control"
+               placeholder="alex@example.com" required autocomplete="email" />
       </div>
 
       <div class="form-group">
         <label for="password" class="form-label">Password</label>
-        <input type="password" id="password" name="password" class="form-input"
-               placeholder="Min. 8 characters" required minlength="8"
+        <input type="password" id="password" name="password" class="form-control"
+               placeholder="At least 8 characters" required minlength="8"
                autocomplete="new-password" />
       </div>
 
-      <button type="submit" class="btn btn-primary btn-full" id="register-btn">Create Account</button>
+      <button type="submit" class="btn btn-primary btn-full" id="register-btn" style="width: 100%; padding: 12px; margin-top: 8px;">
+        Register & Unlock Perks
+      </button>
     </form>
 
-    <p class="auth-switch">
+    <div class="auth-divider">
+      <span>ALREADY REGISTERED?</span>
+    </div>
+
+    <p class="auth-footer-text">
       Already have an account? <a href="/login">Sign in</a>
     </p>
   </div>

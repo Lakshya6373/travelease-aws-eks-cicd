@@ -1,1 +1,5 @@
-variable "repository_name" { type = string; default = "travelease" }
+variable "repository_name" {
+  type    = string
+  default = "travelease"
+}
+

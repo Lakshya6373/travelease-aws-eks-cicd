@@ -5,30 +5,37 @@
   This fragment is returned by POST /recommend via Thymeleaf fragment rendering.
   It is injected into #recommendation-results on the home page via HTMX.
 -->
-<div th:fragment="results" class="container">
+<div th:fragment="results" class="container" style="padding-top: 40px; padding-bottom: 20px;">
 
   <!-- Query echo + count -->
   <div class="results-header" th:if="${results != null}">
     <div class="results-meta">
-      <span class="ai-badge">🤖 AI Powered</span>
-      <h2 class="results-title">
-        Results for "<span th:text="${query}">your query</span>"
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <span class="ai-badge">Bedrock AI Match</span>
+        <span style="font-size: 0.8rem; color: #64748b; font-weight: 600;" th:text="${#lists.size(results)} + ' destination(s) found'"></span>
+      </div>
+      <h2 style="font-size: 1.4rem; font-weight: 800; color: #1a202c; letter-spacing: -0.5px;">
+        Matches for &ldquo;<span th:text="${query}">your query</span>&rdquo;
       </h2>
-      <p class="results-count"
-         th:text="${#lists.size(results)} + ' destination(s) matched'"></p>
     </div>
   </div>
 
   <!-- AI blurb (shown once, from the first result with a blurb) -->
-  <div class="ai-blurb-banner"
-       th:if="${results != null and not #lists.isEmpty(results) and results[0].hasBlurb()}">
-    <span class="blurb-icon">💡</span>
-    <span th:text="${results[0].aiBlurb}"></span>
+  <div class="results-blurb"
+       th:if="${results != null and not #lists.isEmpty(results) and results[0].hasBlurb()}"
+       style="display: flex; align-items: flex-start; gap: 12px;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0066ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;">
+      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+    </svg>
+    <div style="font-size: 0.92rem; color: #1e293b; line-height: 1.6;">
+      <strong style="color: #0066ff;">AI Concierge Note: </strong>
+      <span th:text="${results[0].aiBlurb}"></span>
+    </div>
   </div>
 
   <!-- Destination cards grid -->
   <div class="destinations-grid" th:if="${results != null and not #lists.isEmpty(results)}">
-    <div th:each="result : ${results}" class="destination-card result-card">
+    <div th:each="result : ${results}" class="destination-card">
       <div class="card-image-wrapper">
         <img th:src="${result.destination.imageUrl}"
              th:alt="${result.destination.name}"
@@ -36,21 +43,29 @@
              loading="lazy"
              onerror="this.src='https://images.unsplash.com/photo-1488085061387-422e29b40080?w=800'" />
         <div class="card-category-badge" th:text="${result.destination.category}"></div>
+        <div class="card-wishlist-btn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#e8392a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+          </svg>
+        </div>
       </div>
       <div class="card-body">
         <div class="card-location">
-          <span class="location-icon">📍</span>
+          <svg class="card-location-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
+          </svg>
           <span th:text="${result.destination.name + ', ' + result.destination.country}"></span>
         </div>
         <p class="card-description"
-           th:text="${#strings.abbreviate(result.destination.description, 110)}"></p>
+           th:text="${#strings.abbreviate(result.destination.description, 100)}"></p>
         <div class="card-footer">
           <div class="card-price">
+            <span class="price-from">From</span>
             <span class="price-amount" th:text="'$' + ${result.destination.pricePerNight}"></span>
             <span class="price-unit">/ night</span>
           </div>
           <a th:href="@{/destinations/{id}(id=${result.destination.id})}"
-             class="btn btn-primary btn-sm">View →</a>
+             class="btn btn-primary btn-sm">View Deal</a>
         </div>
       </div>
     </div>
@@ -58,8 +73,13 @@
 
   <!-- Empty / fallback state -->
   <div th:if="${results == null or #lists.isEmpty(results)}" class="empty-state">
-    <div class="empty-icon">🔭</div>
-    <p>No destinations matched. Try a different search term.</p>
+    <div class="empty-icon">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+    </div>
+    <h3>No exact match found</h3>
+    <p>Try searching for words like "beach", "mountains", "luxury", or "budget".</p>
   </div>
 
 </div>

@@ -19,10 +19,23 @@
 
     <properties>
         <java.version>17</java.version>
-        <aws.sdk.version>2.26.27</aws.sdk.version>
+        <aws.sdk.version>2.46.7</aws.sdk.version>
         <testcontainers.version>1.20.1</testcontainers.version>
         <logback.json.version>0.1.5</logback.json.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- AWS SDK v2 BOM — manages versions for all AWS SDK modules -->
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>${aws.sdk.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- Web + MVC -->
@@ -76,10 +89,16 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
-        <!-- AWS SDK v2 — Bedrock Runtime -->
+        <!-- AWS SDK v2 — Bedrock Runtime (version managed by BOM above) -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
-            <artifactId>bedrock-runtime</artifactId>
+            <artifactId>bedrockruntime</artifactId>
+            <version>${aws.sdk.version}</version>
+        </dependency>
+        <!-- Use Java's built-in HTTP client — avoids Apache HttpClient5 version conflict with Spring Boot -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>url-connection-client</artifactId>
             <version>${aws.sdk.version}</version>
         </dependency>
 
@@ -109,6 +128,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- spring-boot-testcontainers provides @ServiceConnection (Spring Boot 3.1+) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
