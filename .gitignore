@@ -1,0 +1,42 @@
+# Maven / Java
+app/target/
+*.class
+*.jar
+*.war
+*.ear
+*.iml
+.idea/
+.mvn/wrapper/maven-wrapper.jar
+
+# Terraform
+**/.terraform/
+**/.terraform.lock.hcl
+**/terraform.tfstate
+**/terraform.tfstate.backup
+**/terraform.tfstate.*.backup
+*.tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Sensitive — NEVER commit
+**/terraform.tfvars
+!**/terraform.tfvars.example
+
+# OS / editors
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+*.log
+
+# Docker
+*.env
+
+# Dependency check
+app/dependency-check-report.html
+
+# Node (if any tooling added later)
+node_modules/

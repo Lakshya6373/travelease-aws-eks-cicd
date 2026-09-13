@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "travelease.fullname" . }}
+  namespace: travelease
+  labels:
+    {{- include "travelease.labels" . | nindent 4 }}
+    # This label is required for the Prometheus Operator to discover this ServiceMonitor
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      {{- include "travelease.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - path: /actuator/prometheus
+      port: http
+      interval: 30s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - travelease

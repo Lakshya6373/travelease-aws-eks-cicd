@@ -1,0 +1,61 @@
+replicaCount: 1
+
+image:
+  # Override at deploy time: --set image.repository=<account>.dkr.ecr.ap-south-1.amazonaws.com/travelease
+  repository: ""
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+serviceAccount:
+  create: true
+  name: "travelease-app"
+  # IRSA annotation — set per environment in values-{env}.yaml
+  bedrockRoleArn: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  className: "alb"
+  wafAclArn: ""         # Set to WAF Web ACL ARN in test/prod
+  accessLogsBucket: ""  # Set to access logs S3 bucket name per env
+
+env:
+  AWS_REGION: "ap-south-1"
+  BEDROCK_REGION: "us-east-1"
+  BEDROCK_MODEL_ID: "amazon.nova-micro-v1:0"
+  RECOMMENDATION_ENABLED: "true"
+  SPRING_PROFILES_ACTIVE: "prod"
+
+resources:
+  requests:
+    cpu: "250m"
+    memory: "512Mi"
+  limits:
+    cpu: "1000m"
+    memory: "1Gi"
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+
+# PodDisruptionBudget
+pdb:
+  minAvailable: 1
+
+livenessProbe:
+  path: /actuator/health/liveness
+  initialDelaySeconds: 60
+  periodSeconds: 15
+  failureThreshold: 3
+
+readinessProbe:
+  path: /actuator/health/readiness
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 3

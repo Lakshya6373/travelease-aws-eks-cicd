@@ -1,0 +1,12 @@
+apiVersion: v2
+name: travelease
+description: TravelEase — AI-powered travel booking platform on AWS EKS
+type: application
+version: 0.1.0
+appVersion: "0.0.1-SNAPSHOT"
+keywords:
+  - travel
+  - aws
+  - eks
+  - bedrock
+home: https://github.com/<YOUR-GITHUB-USERNAME>/travelease-aws-eks-cicd

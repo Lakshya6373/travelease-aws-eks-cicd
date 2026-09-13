@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/header :: head('All Destinations — TravelEase')}"></head>
+<body class="page-destinations">
+
+<nav th:replace="~{fragments/header :: nav}"></nav>
+
+<main class="section">
+  <div class="container">
+    <div class="page-header">
+      <h1 class="page-title">All Destinations</h1>
+      <p class="page-subtitle">Explore our curated collection of <span th:text="${#lists.size(destinations)}">0</span> incredible places</p>
+    </div>
+
+    <!-- Category filter tabs -->
+    <div class="filter-tabs" id="filter-tabs">
+      <button class="filter-tab active" data-filter="all">All</button>
+      <button class="filter-tab" data-filter="MOUNTAIN">🏔️ Mountain</button>
+      <button class="filter-tab" data-filter="BEACH">🏖️ Beach</button>
+      <button class="filter-tab" data-filter="CITY">🌆 City</button>
+      <button class="filter-tab" data-filter="ADVENTURE">🧗 Adventure</button>
+      <button class="filter-tab" data-filter="CULTURAL">🏛️ Cultural</button>
+      <button class="filter-tab" data-filter="WILDLIFE">🦁 Wildlife</button>
+      <button class="filter-tab" data-filter="HONEYMOON">💑 Honeymoon</button>
+    </div>
+
+    <!-- Destinations grid -->
+    <div class="destinations-grid" id="destinations-grid">
+      <div th:each="dest : ${destinations}"
+           class="destination-card"
+           th:data-category="${dest.category}"
+           th:data-id="${dest.id}">
+        <div class="card-image-wrapper">
+          <img th:src="${dest.imageUrl}"
+               th:alt="${dest.name}"
+               class="card-image"
+               loading="lazy"
+               onerror="this.src='https://images.unsplash.com/photo-1488085061387-422e29b40080?w=800'" />
+          <div class="card-category-badge" th:text="${dest.category}"></div>
+        </div>
+        <div class="card-body">
+          <div class="card-location">
+            <span class="location-icon">📍</span>
+            <span th:text="${dest.name + ', ' + dest.country}"></span>
+          </div>
+          <p class="card-description" th:text="${#strings.abbreviate(dest.description, 110)}"></p>
+          <div class="card-footer">
+            <div class="card-price">
+              <span class="price-amount" th:text="'$' + ${dest.pricePerNight}"></span>
+              <span class="price-unit">/ night</span>
+            </div>
+            <a th:href="@{/destinations/{id}(id=${dest.id})}" class="btn btn-primary btn-sm">View →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty state -->
+    <div id="no-results" class="empty-state" style="display:none;">
+      <div class="empty-icon">🔭</div>
+      <p>No destinations in this category yet.</p>
+    </div>
+  </div>
+</main>
+
+<footer th:replace="~{fragments/footer :: footer}"></footer>
+
+<script>
+  // Client-side category filtering
+  document.querySelectorAll('.filter-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const filter = tab.dataset.filter;
+      const cards = document.querySelectorAll('.destination-card');
+      let visible = 0;
+      cards.forEach(card => {
+        const match = filter === 'all' || card.dataset.category === filter;
+        card.style.display = match ? '' : 'none';
+        if (match) visible++;
+      });
+      document.getElementById('no-results').style.display = visible === 0 ? 'flex' : 'none';
+    });
+  });
+</script>
+</body>
+</html>

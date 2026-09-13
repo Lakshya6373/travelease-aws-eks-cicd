@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/header :: head(${destination.name + ' — TravelEase'})}"></head>
+<body class="page-detail">
+
+<nav th:replace="~{fragments/header :: nav}"></nav>
+
+<main class="section">
+  <div class="container detail-container">
+
+    <!-- Breadcrumb -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="/">Home</a> › <a href="/destinations">Destinations</a> › <span th:text="${destination.name}"></span>
+    </nav>
+
+    <div class="detail-grid">
+      <!-- ── Left: image + info ──────────────────────────────────────────── -->
+      <div class="detail-main">
+        <div class="detail-image-wrapper">
+          <img th:src="${destination.imageUrl}"
+               th:alt="${destination.name}"
+               class="detail-image"
+               onerror="this.src='https://images.unsplash.com/photo-1488085061387-422e29b40080?w=800'" />
+          <div class="detail-category-badge" th:text="${destination.category}"></div>
+        </div>
+
+        <div class="detail-info">
+          <h1 class="detail-title" th:text="${destination.name}"></h1>
+          <div class="detail-location">
+            <span>📍</span>
+            <span th:text="${destination.name + ', ' + destination.country}"></span>
+          </div>
+          <p class="detail-description" th:text="${destination.description}"></p>
+        </div>
+      </div>
+
+      <!-- ── Right: booking card ────────────────────────────────────────── -->
+      <aside class="booking-card">
+        <div class="booking-card-header">
+          <div class="booking-price">
+            <span class="booking-price-amount" th:text="'$' + ${destination.pricePerNight}"></span>
+            <span class="booking-price-unit">/ night</span>
+          </div>
+          <div class="booking-category-tag" th:text="${destination.category}"></div>
+        </div>
+
+        <!-- Error from failed booking attempt -->
+        <div th:if="${param.error}" class="alert alert-error">
+          <span th:text="${param.error}">Error message</span>
+        </div>
+
+        <!-- Booking form — only shown when logged in -->
+        <div sec:authorize="isAuthenticated()">
+          <form id="booking-form"
+                th:action="@{/bookings}"
+                method="post"
+                class="booking-form">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+            <input type="hidden" name="destinationId" th:value="${destination.id}" />
+
+            <div class="form-group">
+              <label for="checkIn" class="form-label">Check-in Date</label>
+              <input type="date" id="checkIn" name="checkIn" class="form-input" required
+                     th:min="${#temporals.format(#temporals.createNow(), 'yyyy-MM-dd')}" />
+            </div>
+
+            <div class="form-group">
+              <label for="checkOut" class="form-label">Check-out Date</label>
+              <input type="date" id="checkOut" name="checkOut" class="form-input" required />
+            </div>
+
+            <div class="form-group">
+              <label for="guests" class="form-label">Number of Guests</label>
+              <select id="guests" name="guests" class="form-input">
+                <option value="1">1 Guest</option>
+                <option value="2" selected>2 Guests</option>
+                <option value="3">3 Guests</option>
+                <option value="4">4 Guests</option>
+                <option value="5">5+ Guests</option>
+              </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-full" id="book-now-btn">Book Now</button>
+          </form>
+        </div>
+
+        <!-- Prompt to login if not authenticated -->
+        <div sec:authorize="!isAuthenticated()" class="login-prompt">
+          <p>Please <a href="/login">sign in</a> or <a href="/register">register</a> to book this destination.</p>
+        </div>
+      </aside>
+    </div>
+
+  </div>
+</main>
+
+<footer th:replace="~{fragments/footer :: footer}"></footer>
+
+<script>
+  // Ensure check-out is always after check-in
+  document.getElementById('checkIn')?.addEventListener('change', function() {
+    const checkOut = document.getElementById('checkOut');
+    checkOut.min = this.value;
+    if (checkOut.value && checkOut.value <= this.value) {
+      checkOut.value = '';
+    }
+  });
+</script>
+</body>
+</html>

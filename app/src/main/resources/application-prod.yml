@@ -1,0 +1,15 @@
+spring:
+  thymeleaf:
+    cache: true
+  datasource:
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+
+logging:
+  level:
+    ai.travelease: INFO
+    root: WARN
+  # Structured JSON output for prod — parsed by Promtail
+  pattern:
+    console: "%d{ISO8601} %-5level [%thread] %logger{36} - %msg%n"

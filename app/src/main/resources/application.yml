@@ -1,0 +1,60 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:travelease}
+    username: ${DB_USER:travelease}
+    password: ${DB_PASSWORD:localpassword}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      connection-timeout: 30000
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      ddl-auto: validate   # Flyway owns the schema; Hibernate only validates
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  thymeleaf:
+    cache: false
+    encoding: UTF-8
+    mode: HTML
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true   # exposes /actuator/health/liveness and /actuator/health/readiness
+  metrics:
+    tags:
+      application: travelease
+
+# Application-level config + JWT
+app:
+  jwt:
+    secret: ${JWT_SECRET:local-dev-only-change-me}
+  recommendation:
+    enabled: ${RECOMMENDATION_ENABLED:true}
+
+# AWS config — two regions intentionally
+aws:
+  region: ${AWS_REGION:ap-south-1}
+  bedrock:
+    region: ${BEDROCK_REGION:us-east-1}
+    model-id: ${BEDROCK_MODEL_ID:amazon.nova-micro-v1:0}

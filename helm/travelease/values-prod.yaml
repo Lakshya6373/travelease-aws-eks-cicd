@@ -1,0 +1,26 @@
+# Prod overrides — WAF enabled, 2+ replicas
+replicaCount: 2
+
+env:
+  SPRING_PROFILES_ACTIVE: "prod"
+  RECOMMENDATION_ENABLED: "true"
+
+serviceAccount:
+  bedrockRoleArn: ""  # Replace with: terraform output -raw bedrock_role_arn (from prod env)
+
+ingress:
+  wafAclArn: ""      # Replace with: terraform output -raw waf_acl_arn (from prod env)
+  accessLogsBucket: "" # Replace with: terraform output -raw access_logs_bucket (from prod env)
+
+resources:
+  requests:
+    cpu: "500m"
+    memory: "768Mi"
+  limits:
+    cpu: "2000m"
+    memory: "1536Mi"
+
+autoscaling:
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 65

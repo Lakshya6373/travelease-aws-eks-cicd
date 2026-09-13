@@ -1,0 +1,357 @@
+name: CD — Deploy Pipeline
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write   # Required for OIDC federation with AWS
+  contents: read
+  pull-requests: write
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+
+jobs:
+  # ── Job 1: Build & Test ─────────────────────────────────────────────────────
+  build-and-test:
+    name: Build & Unit Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+          cache: maven
+
+      - name: Build and package (skip tests — already run in CI)
+        run: mvn -B package -DskipTests
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-jar
+          path: app/target/*.jar
+          retention-days: 1
+
+  # ── Job 2: Build Docker Image, Trivy Scan, Push to ECR ─────────────────────
+  build-and-push-image:
+    name: Docker Build + Trivy Scan + Push to ECR
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    outputs:
+      image_tag: ${{ steps.set-tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: set-tag
+        run: echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker image
+        working-directory: app
+        run: |
+          docker build -t travelease:${{ github.sha }} -t travelease:latest .
+
+      - name: Trivy vulnerability scan (fail on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "travelease:${{ github.sha }}"
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "HIGH,CRITICAL"
+          exit-code: "1"
+          ignore-unfixed: true
+
+      - name: Upload Trivy results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-sarif
+          path: trivy-results.sarif
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.SHARED_ECR_PUSH_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Tag and push to ECR
+        run: |
+          ECR_REPO="${{ steps.ecr-login.outputs.registry }}/travelease"
+          docker tag travelease:${{ github.sha }} $ECR_REPO:${{ github.sha }}
+          docker tag travelease:${{ github.sha }} $ECR_REPO:latest
+          docker push $ECR_REPO:${{ github.sha }}
+          docker push $ECR_REPO:latest
+
+  # ── Job 3: Deploy to Dev ────────────────────────────────────────────────────
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    needs: build-and-push-image
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC — dev role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.DEV_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig for dev cluster
+        run: aws eks update-kubeconfig --name travelease-dev --region ${{ env.AWS_REGION }}
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "3.15.0"
+
+      - name: Deploy to dev
+        run: |
+          helm upgrade --install travelease helm/travelease \
+            -f helm/travelease/values-dev.yaml \
+            --namespace travelease \
+            --create-namespace \
+            --set image.tag=${{ github.sha }} \
+            --set image.repository=${{ vars.ECR_REGISTRY }}/travelease \
+            --wait \
+            --timeout 5m
+
+  # ── Job 4: Smoke Test Dev ───────────────────────────────────────────────────
+  smoke-test-dev:
+    name: Smoke Test Dev
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (dev)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.DEV_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig for dev cluster
+        run: aws eks update-kubeconfig --name travelease-dev --region ${{ env.AWS_REGION }}
+
+      - name: Get dev ALB URL
+        id: get-url
+        run: |
+          ALB_URL=$(kubectl get ingress travelease -n travelease \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          echo "alb_url=http://$ALB_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Run smoke tests
+        run: bash scripts/smoke-test.sh "${{ steps.get-url.outputs.alb_url }}"
+
+  # ── Job 5: Deploy to Test (Staging) ────────────────────────────────────────
+  deploy-test:
+    name: Deploy to Test (Staging)
+    runs-on: ubuntu-latest
+    needs: smoke-test-dev
+    environment: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (test)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TEST_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig for test cluster
+        run: aws eks update-kubeconfig --name travelease-test --region ${{ env.AWS_REGION }}
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "3.15.0"
+
+      - name: Deploy to test
+        run: |
+          helm upgrade --install travelease helm/travelease \
+            -f helm/travelease/values-test.yaml \
+            --namespace travelease \
+            --create-namespace \
+            --set image.tag=${{ github.sha }} \
+            --set image.repository=${{ vars.ECR_REGISTRY }}/travelease \
+            --wait \
+            --timeout 5m
+
+  # ── Job 6: Smoke Test Test ──────────────────────────────────────────────────
+  smoke-test-test:
+    name: Smoke Test Test (Staging)
+    runs-on: ubuntu-latest
+    needs: deploy-test
+    environment: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (test)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TEST_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig for test cluster
+        run: aws eks update-kubeconfig --name travelease-test --region ${{ env.AWS_REGION }}
+
+      - name: Get test ALB URL
+        id: get-url
+        run: |
+          ALB_URL=$(kubectl get ingress travelease -n travelease \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          echo "alb_url=http://$ALB_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Run smoke tests
+        run: bash scripts/smoke-test.sh "${{ steps.get-url.outputs.alb_url }}"
+
+  # ── Job 7: Post Findings Summary ────────────────────────────────────────────
+  post-findings-summary:
+    name: Post Pipeline Summary
+    runs-on: ubuntu-latest
+    needs: smoke-test-test
+    steps:
+      - name: Write step summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const summary = `## 🚀 TravelEase Deployment Summary
+            | Stage | Status |
+            |-------|--------|
+            | Build & Test | ✅ Passed |
+            | Docker Build + Trivy | ✅ No HIGH/CRITICAL CVEs |
+            | Deploy Dev | ✅ Deployed |
+            | Smoke Test Dev | ✅ Passed |
+            | Deploy Test (Staging) | ✅ Deployed |
+            | Smoke Test Test | ✅ Passed |
+            | **Production** | ⏳ Awaiting manual approval |
+
+            **Image Tag:** \`${{ github.sha }}\`
+            **Triggered by:** ${{ github.actor }}
+            **Commit:** ${{ github.event.head_commit.message }}
+
+            > Production deployment requires review approval. Check the **Deploy to Production** job below.
+            `;
+            core.summary.addRaw(summary);
+            await core.summary.write();
+
+            // Also post as a commit comment
+            await github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: summary
+            });
+
+  # ── Job 8: Deploy to Production (Manual Approval Gate) ─────────────────────
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: post-findings-summary
+    environment: production   # ← GitHub Environments "Required reviewers" pause here
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (prod)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.PROD_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig for prod cluster
+        run: aws eks update-kubeconfig --name travelease-prod --region ${{ env.AWS_REGION }}
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "3.15.0"
+
+      - name: Deploy to production
+        run: |
+          helm upgrade --install travelease helm/travelease \
+            -f helm/travelease/values-prod.yaml \
+            --namespace travelease \
+            --create-namespace \
+            --set image.tag=${{ github.sha }} \
+            --set image.repository=${{ vars.ECR_REGISTRY }}/travelease \
+            --wait \
+            --timeout 8m
+
+  # ── Job 9: Smoke Test Production ────────────────────────────────────────────
+  smoke-test-prod:
+    name: Smoke Test Production
+    runs-on: ubuntu-latest
+    needs: deploy-prod
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (prod)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.PROD_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig for prod cluster
+        run: aws eks update-kubeconfig --name travelease-prod --region ${{ env.AWS_REGION }}
+
+      - name: Get prod ALB URL
+        id: get-url
+        run: |
+          ALB_URL=$(kubectl get ingress travelease -n travelease \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          echo "alb_url=http://$ALB_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Run smoke tests
+        run: bash scripts/smoke-test.sh "${{ steps.get-url.outputs.alb_url }}"
+
+  # ── Job 10: Notify on Failure ────────────────────────────────────────────────
+  notify-failure:
+    name: Notify on Pipeline Failure
+    runs-on: ubuntu-latest
+    needs:
+      - build-and-test
+      - build-and-push-image
+      - deploy-dev
+      - smoke-test-dev
+      - deploy-test
+      - smoke-test-test
+      - deploy-prod
+      - smoke-test-prod
+    if: failure()
+    steps:
+      - name: Send failure email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "❌ TravelEase Pipeline Failed — ${{ github.ref_name }} (${{ github.sha }})"
+          to: ${{ secrets.SMTP_USERNAME }}
+          from: TravelEase CI/CD <${{ secrets.SMTP_USERNAME }}>
+          body: |
+            The TravelEase CD pipeline failed.
+
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            Actor: ${{ github.actor }}
+            Commit message: ${{ github.event.head_commit.message }}
+
+            View the full run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

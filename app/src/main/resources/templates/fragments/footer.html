@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<footer th:fragment="footer" class="site-footer">
+  <div class="footer-container">
+    <div class="footer-brand">
+      <span class="nav-logo">✈️</span>
+      <span class="footer-brand-name">TravelEase</span>
+      <p class="footer-tagline">AI-powered travel discovery for modern explorers.</p>
+    </div>
+    <div class="footer-links">
+      <div class="footer-col">
+        <h4>Explore</h4>
+        <a href="/destinations">All Destinations</a>
+        <a href="/">Home</a>
+      </div>
+      <div class="footer-col">
+        <h4>Account</h4>
+        <a href="/login">Sign In</a>
+        <a href="/register">Register</a>
+        <a href="/my-bookings">My Bookings</a>
+      </div>
+      <div class="footer-col">
+        <h4>Tech Stack</h4>
+        <span>Spring Boot 3.3</span>
+        <span>AWS EKS</span>
+        <span>Amazon Bedrock</span>
+        <span>Terraform + Helm</span>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>&copy; 2026 TravelEase. Built on AWS EKS with ❤️ and Bedrock AI.</p>
+  </div>
+</footer>
+</body>
+</html>

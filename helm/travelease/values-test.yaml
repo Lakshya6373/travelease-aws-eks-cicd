@@ -1,0 +1,17 @@
+# Test (staging) overrides — WAF enabled
+replicaCount: 1
+
+env:
+  SPRING_PROFILES_ACTIVE: "test"
+  RECOMMENDATION_ENABLED: "true"
+
+serviceAccount:
+  bedrockRoleArn: ""  # Replace with: terraform output -raw bedrock_role_arn (from test env)
+
+ingress:
+  wafAclArn: ""      # Replace with: terraform output -raw waf_acl_arn (from test env)
+  accessLogsBucket: "" # Replace with: terraform output -raw access_logs_bucket (from test env)
+
+autoscaling:
+  minReplicas: 1
+  maxReplicas: 3

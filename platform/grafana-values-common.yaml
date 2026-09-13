@@ -1,0 +1,58 @@
+# kube-prometheus-stack common values
+# Applied during cluster bootstrap via --values platform/grafana-values-common.yaml
+
+grafana:
+  adminPassword: ""   # Populated from Secrets Manager during bootstrap — see bootstrap-cluster.sh
+  plugins:
+    - grafana-athena-datasource  # For ALB access log querying via Athena
+  grafana.ini:
+    analytics:
+      check_for_updates: false
+
+prometheus:
+  prometheusSpec:
+    retention: 3d
+    # App-level ServiceMonitor discovery
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+
+  # Use PVC only on prod; set to false for dev/test in per-cluster overrides
+  persistence:
+    enabled: false
+
+loki:
+  persistence:
+    enabled: false
+
+# Promtail extra config for system (journal) logs
+promtail:
+  extraScrapeConfigs:
+    - job_name: journal
+      journal:
+        path: /var/log/journal
+        max_age: 12h
+        labels:
+          job: systemd-journal
+      relabel_configs:
+        - source_labels: ["__journal__systemd_unit"]
+          target_label: "unit"
+        - source_labels: ["__journal__hostname"]
+          target_label: "hostname"
+
+  # Mount node journal + machine-id for systemd log scraping
+  extraVolumes:
+    - name: journal
+      hostPath:
+        path: /var/log/journal
+    - name: machine-id
+      hostPath:
+        path: /etc/machine-id
+
+  extraVolumeMounts:
+    - name: journal
+      mountPath: /var/log/journal
+      readOnly: true
+    - name: machine-id
+      mountPath: /etc/machine-id
+      readOnly: true

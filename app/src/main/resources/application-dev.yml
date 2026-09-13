@@ -1,0 +1,10 @@
+spring:
+  jpa:
+    show-sql: true
+  thymeleaf:
+    cache: false
+
+logging:
+  level:
+    ai.travelease: DEBUG
+    org.springframework.security: DEBUG

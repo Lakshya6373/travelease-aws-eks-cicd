@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/header :: head('TravelEase — Discover Your Next Journey')}"></head>
+<body class="page-home">
+
+<nav th:replace="~{fragments/header :: nav}"></nav>
+
+<!-- ── Hero ──────────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-content">
+    <div class="hero-badge">✈️ AI-Powered Travel Discovery</div>
+    <h1 class="hero-title">Explore the World,<br><span class="gradient-text">Your Way</span></h1>
+    <p class="hero-subtitle">Let AI understand your travel dreams and match you with perfect destinations — real places, real prices, instant recommendations.</p>
+
+    <!-- AI Recommendation Search Box -->
+    <div class="search-card" id="ai-search-section">
+      <form id="recommend-form"
+            th:action="@{/recommend}"
+            method="post"
+            hx-post="/recommend"
+            hx-target="#recommendation-results"
+            hx-swap="innerHTML"
+            hx-indicator="#search-spinner">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+        <div class="search-bar">
+          <span class="search-icon">🔍</span>
+          <input id="search-query"
+                 type="text"
+                 name="query"
+                 class="search-input"
+                 placeholder="e.g. 'I want to explore mountains' or 'tropical honeymoon beach'"
+                 autocomplete="off"
+                 required />
+          <button type="submit" class="search-btn" id="search-submit-btn">
+            <span class="search-btn-text">Find Destinations</span>
+            <span id="search-spinner" class="htmx-indicator spinner">⏳</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ── AI Results (injected by HTMX) ────────────────────────────────────── -->
+<section id="recommendation-results" class="section results-section"></section>
+
+<!-- ── Featured Destinations ────────────────────────────────────────────── -->
+<section class="section featured-section">
+  <div class="container">
+    <div class="section-header">
+      <h2 class="section-title">Featured Destinations</h2>
+      <p class="section-subtitle">Handpicked places to inspire your next adventure</p>
+    </div>
+    <div class="destinations-grid" id="featured-grid">
+      <div th:each="dest : ${featured}" class="destination-card" th:data-id="${dest.id}">
+        <div class="card-image-wrapper">
+          <img th:src="${dest.imageUrl}"
+               th:alt="${dest.name}"
+               class="card-image"
+               loading="lazy"
+               onerror="this.src='https://images.unsplash.com/photo-1488085061387-422e29b40080?w=800'" />
+          <div class="card-category-badge" th:text="${dest.category}"></div>
+        </div>
+        <div class="card-body">
+          <div class="card-location">
+            <span class="location-icon">📍</span>
+            <span th:text="${dest.name + ', ' + dest.country}"></span>
+          </div>
+          <p class="card-description" th:text="${#strings.abbreviate(dest.description, 100)}"></p>
+          <div class="card-footer">
+            <div class="card-price">
+              <span class="price-amount" th:text="'$' + ${dest.pricePerNight}"></span>
+              <span class="price-unit">/ night</span>
+            </div>
+            <a th:href="@{/destinations/{id}(id=${dest.id})}" class="btn btn-primary btn-sm">View Details</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="section-cta">
+      <a href="/destinations" class="btn btn-outline-primary">Browse All Destinations →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Category Pills ────────────────────────────────────────────────────── -->
+<section class="section categories-section">
+  <div class="container">
+    <h2 class="section-title">Explore by Category</h2>
+    <div class="categories-grid">
+      <a href="/destinations" class="category-pill">🏔️ Mountain</a>
+      <a href="/destinations" class="category-pill">🏖️ Beach</a>
+      <a href="/destinations" class="category-pill">🌆 City</a>
+      <a href="/destinations" class="category-pill">🧗 Adventure</a>
+      <a href="/destinations" class="category-pill">🏛️ Cultural</a>
+      <a href="/destinations" class="category-pill">🦁 Wildlife</a>
+      <a href="/destinations" class="category-pill">💑 Honeymoon</a>
+    </div>
+  </div>
+</section>
+
+<footer th:replace="~{fragments/footer :: footer}"></footer>
+
+<!-- HTMX for seamless partial updates -->
+<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</body>
+</html>

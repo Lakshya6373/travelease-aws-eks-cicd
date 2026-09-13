@@ -1,0 +1,152 @@
+name: CI — Pull Request Checks
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Job 1: Unit Tests ───────────────────────────────────────────────────────
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+          cache: maven
+
+      - name: Run unit tests
+        run: mvn -B test -pl . -Dtest='!*IT'
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: app/target/surefire-reports/
+
+  # ── Job 2: Integration Tests (Testcontainers) ───────────────────────────────
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+          cache: maven
+
+      - name: Run integration tests (Testcontainers + PostgreSQL)
+        run: mvn -B verify -Pintegration
+        env:
+          # Testcontainers uses Docker socket — available on GitHub-hosted runners
+          TESTCONTAINERS_RYUK_DISABLED: "false"
+
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: app/target/failsafe-reports/
+
+  # ── Job 3: OWASP Dependency Scan ────────────────────────────────────────────
+  dependency-scan:
+    name: Dependency Vulnerability Scan (OWASP)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+          cache: maven
+
+      - name: OWASP Dependency-Check (fail on CVSS >= 7)
+        run: mvn -B org.owasp:dependency-check-maven:check
+        continue-on-error: false
+
+      - name: Upload dependency-check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: app/target/dependency-check-report.html
+
+  # ── Job 4: Terraform Lint ───────────────────────────────────────────────────
+  terraform-lint:
+    name: Terraform Lint + Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.11.0"
+
+      - name: Terraform format check
+        run: terraform fmt -check -recursive terraform/
+
+      - name: Validate modules
+        run: |
+          for dir in \
+            terraform/modules/vpc \
+            terraform/modules/security-groups \
+            terraform/modules/eks \
+            terraform/modules/rds \
+            terraform/modules/ecr \
+            terraform/modules/waf \
+            terraform/modules/access-logging \
+            terraform/modules/irsa-alb-controller \
+            terraform/modules/irsa-external-secrets \
+            terraform/modules/irsa-bedrock \
+            terraform/modules/secrets-manager; do
+            echo "Validating $dir..."
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+          done
+
+      - name: Run tfsec (security scan)
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: terraform/
+          soft_fail: false
+
+  # ── Job 5: Helm Lint ────────────────────────────────────────────────────────
+  helm-lint:
+    name: Helm Chart Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "3.15.0"
+
+      - name: Helm lint (dev values)
+        run: helm lint helm/travelease -f helm/travelease/values-dev.yaml
+
+      - name: Helm lint (test values)
+        run: helm lint helm/travelease -f helm/travelease/values-test.yaml
+
+      - name: Helm lint (prod values)
+        run: helm lint helm/travelease -f helm/travelease/values-prod.yaml

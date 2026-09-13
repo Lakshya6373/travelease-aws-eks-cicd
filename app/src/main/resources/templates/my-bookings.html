@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/header :: head('My Bookings — TravelEase')}"></head>
+<body class="page-bookings">
+
+<nav th:replace="~{fragments/header :: nav}"></nav>
+
+<main class="section">
+  <div class="container">
+    <div class="page-header">
+      <h1 class="page-title">My Bookings</h1>
+      <p class="page-subtitle">Your travel itinerary at a glance</p>
+    </div>
+
+    <!-- Success message -->
+    <div th:if="${param.success}" class="alert alert-success">
+      🎉 Booking confirmed! Check the details below.
+    </div>
+
+    <!-- Empty state -->
+    <div th:if="${#lists.isEmpty(bookings)}" class="empty-state">
+      <div class="empty-icon">🧳</div>
+      <h3>No bookings yet</h3>
+      <p>Explore our destinations and make your first booking.</p>
+      <a href="/destinations" class="btn btn-primary">Browse Destinations</a>
+    </div>
+
+    <!-- Bookings table -->
+    <div th:unless="${#lists.isEmpty(bookings)}" class="bookings-list">
+      <div th:each="booking : ${bookings}" class="booking-item">
+        <div class="booking-dest-image">
+          <img th:src="${booking.destination.imageUrl}"
+               th:alt="${booking.destination.name}"
+               class="booking-thumb"
+               onerror="this.src='https://images.unsplash.com/photo-1488085061387-422e29b40080?w=200'" />
+        </div>
+        <div class="booking-details">
+          <div class="booking-dest-name" th:text="${booking.destination.name + ', ' + booking.destination.country}"></div>
+          <div class="booking-dates">
+            <span>📅</span>
+            <span th:text="${#temporals.format(booking.checkIn, 'dd MMM yyyy')}"></span>
+            <span>→</span>
+            <span th:text="${#temporals.format(booking.checkOut, 'dd MMM yyyy')}"></span>
+          </div>
+          <div class="booking-meta">
+            <span class="booking-guests">👥 <span th:text="${booking.guests}"></span> guests</span>
+            <span class="booking-status"
+                  th:classappend="${booking.status.name() == 'CONFIRMED' ? 'status-confirmed' :
+                                   booking.status.name() == 'CANCELLED' ? 'status-cancelled' : 'status-pending'}"
+                  th:text="${booking.status}"></span>
+          </div>
+        </div>
+        <div class="booking-price-col">
+          <span class="booking-nightly" th:text="'$' + ${booking.destination.pricePerNight} + '/night'"></span>
+          <a th:href="@{/destinations/{id}(id=${booking.destination.id})}"
+             class="btn btn-outline-primary btn-sm">View</a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer th:replace="~{fragments/footer :: footer}"></footer>
+</body>
+</html>
