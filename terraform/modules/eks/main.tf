@@ -87,10 +87,6 @@ resource "aws_eks_node_group" "main" {
     max_unavailable = 1
   }
 
-  # Attach our Terraform-managed node SG so RDS/other rules take effect
-  # Without this, nodes only get the auto-created EKS cluster SG
-  node_security_group_ids = var.node_security_group_ids != null ? var.node_security_group_ids : []
-
   tags = { Environment = var.environment_name }
 
   depends_on = [
