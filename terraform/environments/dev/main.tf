@@ -29,6 +29,7 @@ locals {
 module "vpc" {
   source                = "../../modules/vpc"
   environment_name      = local.env
+  cluster_name          = "travelease-${local.env}"
   vpc_cidr              = var.vpc_cidr
   public_subnet_cidrs   = var.public_subnet_cidrs
   private_subnet_cidrs  = var.private_subnet_cidrs
@@ -43,15 +44,16 @@ module "security_groups" {
 }
 
 module "eks" {
-  source               = "../../modules/eks"
-  cluster_name         = "travelease-${local.env}"
-  vpc_id               = module.vpc.vpc_id
-  private_subnet_ids   = module.vpc.private_subnet_ids
-  node_instance_types  = var.node_instance_types
-  node_min_size        = var.node_min_size
-  node_max_size        = var.node_max_size
-  node_desired_size    = var.node_desired_size
-  environment_name     = local.env
+  source                  = "../../modules/eks"
+  cluster_name            = "travelease-${local.env}"
+  vpc_id                  = module.vpc.vpc_id
+  private_subnet_ids      = module.vpc.private_subnet_ids
+  node_instance_types     = var.node_instance_types
+  node_min_size           = var.node_min_size
+  node_max_size           = var.node_max_size
+  node_desired_size       = var.node_desired_size
+  environment_name        = local.env
+  node_security_group_ids = [module.security_groups.node_sg_id]
 }
 
 module "rds" {

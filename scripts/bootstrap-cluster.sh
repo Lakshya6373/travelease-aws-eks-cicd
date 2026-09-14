@@ -76,7 +76,8 @@ helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheu
   --create-namespace \
   -f platform/grafana-values-common.yaml \
   --set grafana.adminPassword="${GRAFANA_PASSWORD}" \
-  --set prometheusOperator.admissionWebhooks.enabled=false
+  --set prometheusOperator.admissionWebhooks.enabled=false \
+  --set prometheusOperator.tls.enabled=false
 
 # ── 4. Loki Stack (Loki + Promtail) ─────────────────────────────────────────
 echo "==> [4/5] Installing Loki Stack..."
@@ -84,7 +85,7 @@ helm upgrade --install loki-stack grafana/loki-stack \
   --namespace monitoring \
   --set promtail.enabled=true \
   --set loki.persistence.enabled=false \
-  --set loki.datasource.isDefault=false \
+  --set loki.isDefault=false \
   -f platform/grafana-values-common.yaml
 
 # ── 5. External Secrets Operator ─────────────────────────────────────────────

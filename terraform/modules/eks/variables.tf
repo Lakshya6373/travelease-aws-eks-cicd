@@ -39,3 +39,8 @@ variable "environment_name" {
   type = string
 }
 
+variable "node_security_group_ids" {
+  type        = list(string)
+  default     = null
+  description = "Additional security group IDs to attach to EKS worker nodes. Required for RDS access rules to work."
+}
