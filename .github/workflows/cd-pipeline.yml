@@ -111,12 +111,12 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Update kubeconfig for dev cluster
-        run: aws eks update-kubeconfig --name travelease-dev --region ${{ env.AWS_REGION }}
+        run: aws eks update-kubeconfig --name dev --region ${{ env.AWS_REGION }}
 
       - name: Setup Helm
         uses: azure/setup-helm@v4
         with:
-          version: "3.15.0"
+          version: "3.17.1"
 
       - name: Deploy to dev
         run: |
@@ -145,7 +145,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Update kubeconfig for dev cluster
-        run: aws eks update-kubeconfig --name travelease-dev --region ${{ env.AWS_REGION }}
+        run: aws eks update-kubeconfig --name dev --region ${{ env.AWS_REGION }}
 
       - name: Get dev ALB URL
         id: get-url
@@ -173,12 +173,12 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Update kubeconfig for test cluster
-        run: aws eks update-kubeconfig --name travelease-test --region ${{ env.AWS_REGION }}
+        run: aws eks update-kubeconfig --name test --region ${{ env.AWS_REGION }}
 
       - name: Setup Helm
         uses: azure/setup-helm@v4
         with:
-          version: "3.15.0"
+          version: "3.17.1"
 
       - name: Deploy to test
         run: |
@@ -207,7 +207,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Update kubeconfig for test cluster
-        run: aws eks update-kubeconfig --name travelease-test --region ${{ env.AWS_REGION }}
+        run: aws eks update-kubeconfig --name test --region ${{ env.AWS_REGION }}
 
       - name: Get test ALB URL
         id: get-url
@@ -273,12 +273,12 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Update kubeconfig for prod cluster
-        run: aws eks update-kubeconfig --name travelease-prod --region ${{ env.AWS_REGION }}
+        run: aws eks update-kubeconfig --name prod --region ${{ env.AWS_REGION }}
 
       - name: Setup Helm
         uses: azure/setup-helm@v4
         with:
-          version: "3.15.0"
+          version: "3.17.1"
 
       - name: Deploy to production
         run: |
@@ -307,7 +307,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Update kubeconfig for prod cluster
-        run: aws eks update-kubeconfig --name travelease-prod --region ${{ env.AWS_REGION }}
+        run: aws eks update-kubeconfig --name prod --region ${{ env.AWS_REGION }}
 
       - name: Get prod ALB URL
         id: get-url

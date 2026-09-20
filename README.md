@@ -1,761 +1,1024 @@
-# TravelEase — AI-Powered Travel Booking Platform on AWS EKS
+# TravelEase — AI-Powered Cloud-Native Travel Platform on AWS EKS
 
 [![CI](https://github.com/Lakshya6373/travelease-aws-eks-cicd/actions/workflows/ci.yml/badge.svg)](https://github.com/Lakshya6373/travelease-aws-eks-cicd/actions/workflows/ci.yml)
 [![CD](https://github.com/Lakshya6373/travelease-aws-eks-cicd/actions/workflows/cd-pipeline.yml/badge.svg)](https://github.com/Lakshya6373/travelease-aws-eks-cicd/actions/workflows/cd-pipeline.yml)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.31-326CE5)](https://kubernetes.io/)
+[![Terraform](https://img.shields.io/badge/Terraform-1.15.7-844FBA)](https://www.terraform.io/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3.4-6DB33F)](https://spring.io/projects/spring-boot)
+[![AWS](https://img.shields.io/badge/AWS-ap--south--1-FF9900)](https://aws.amazon.com/)
 
 ---
 
-## 📖 What is This Project?
+## Table of Contents
 
-**TravelEase** is a full-stack travel booking web application built with **Java (Spring Boot)** on the backend and deployed on **Amazon EKS (Kubernetes)**. It lets users browse travel destinations, make bookings, and receive **AI-powered recommendations** using Amazon Bedrock (Nova Micro model).
-
-This repository is not just the application — it is the **entire production-grade cloud infrastructure** as well. Everything from the networking (VPC) to the database (RDS PostgreSQL), Kubernetes cluster, security, monitoring, and CI/CD pipelines is defined as code and automated.
-
-### What does it actually do?
-
-| Feature | Description |
-|---|---|
-| 🔐 **User Auth** | Register and login with JWT-based authentication |
-| 🌍 **Destinations** | Browse travel destinations with categories (Beach, Mountain, City, etc.) |
-| 📅 **Bookings** | Book a destination for a date range with number of travellers |
-| 🤖 **AI Recommendations** | Ask for personalized trip suggestions powered by Amazon Bedrock (Nova Micro LLM) |
-| 📊 **Observability** | Full metrics, logs, and dashboards via Prometheus + Grafana + Loki |
+- [Project Overview](#project-overview)
+- [Technology Stack](#technology-stack)
+- [System Architecture](#system-architecture)
+  - [Infrastructure Topology](#1-infrastructure-topology)
+  - [Secret Resolution and IRSA Flow](#2-secret-resolution-and-irsa-flow)
+  - [CI/CD Pipeline and Promotion Flow](#3-cicd-pipeline-and-promotion-flow)
+  - [Observability Stack](#4-observability-stack)
+- [Repository Structure](#repository-structure)
+- [Environment Configuration](#environment-configuration)
+- [Prerequisites](#prerequisites)
+- [Local Development](#local-development)
+- [AWS Deployment Walkthrough](#aws-deployment-walkthrough)
+- [GitHub Actions Setup](#github-actions-setup)
+- [Verification and Runbook](#verification-and-runbook)
+- [Security Architecture](#security-architecture)
+- [Cost Design Decisions](#cost-design-decisions)
+- [Troubleshooting](#troubleshooting)
+- [Teardown](#teardown)
 
 ---
 
-## 🗂️ What's Inside This Repository?
+## Project Overview
 
-Here is a plain-English explanation of every folder in this repo:
+TravelEase is a travel booking web application that allows users to search for destinations, make bookings, and get AI-powered travel recommendations. What makes this project special is not just the application itself — it is the complete production-grade infrastructure and deployment pipeline built around it.
+
+Think of it this way: the application is the car, and everything else in this repository (Terraform, Kubernetes, Helm, GitHub Actions) is the factory, the roads, and the traffic management system that gets the car built, tested, and safely delivered to customers.
+
+**The application** is a Java Spring Boot web app backed by a PostgreSQL database. It uses Amazon Bedrock (Amazon's AI service) to suggest travel destinations based on user preferences.
+
+**The infrastructure** is deployed on AWS in three completely separate environments — `dev` for developers to test changes, `test` (staging) to verify before going live, and `prod` which is what real users access.
+
+**The deployment pipeline** is fully automated. When a developer pushes code to the main branch, GitHub Actions automatically builds the application, scans it for security vulnerabilities, packages it into a Docker container, and deploys it to AWS — without anyone manually running commands.
+
+The project demonstrates a complete, real-world DevOps implementation covering:
+
+- **Infrastructure as Code** with Terraform — the entire AWS infrastructure (VPCs, EKS clusters, RDS databases, IAM roles) is defined in code files, not clicked through a web console
+- **GitOps-style deployment** with Helm — Kubernetes deployments are managed through version-controlled Helm charts with per-environment configuration files
+- **Zero-trust security** using IRSA (IAM Roles for Service Accounts) — the application never uses or stores AWS access keys; it proves its identity using a Kubernetes token
+- **Automated multi-environment CI/CD** via GitHub Actions — code goes from a developer's laptop to production through an automated pipeline with quality gates
+- **Unified observability** with Prometheus, Grafana, and Loki — every metric, log, and alert is visible in a single dashboard
+
+At startup, the application fetches its database credentials and JWT signing key directly from AWS Secrets Manager using native AWS SDK calls and IRSA identity. No secrets are stored in code, environment files, Kubernetes ConfigMaps, or the git repository.
+
+---
+
+## Technology Stack
+
+| Layer | Technology | Version | What It Does |
+| :--- | :--- | :--- | :--- |
+| Application | Spring Boot Java 17 Temurin | 3.3.4 | The web application itself — handles HTTP requests, business logic, and database queries |
+| Database | Amazon RDS PostgreSQL | 16.9 | Stores all application data: users, bookings, destinations |
+| Container Runtime | Docker Distroless Multi-Stage Build | Latest | Packages the application into a portable, minimal container image |
+| Container Registry | Amazon ECR | — | Stores Docker images in AWS, like a private Docker Hub |
+| Orchestration | Amazon EKS Kubernetes | 1.31 | Runs and manages containers at scale on AWS; handles restarts, scaling, health checks |
+| Package Management | Helm | 3.17.1 | Kubernetes package manager — templates all Kubernetes manifests so one chart works for dev, test, and prod |
+| Infrastructure as Code | Terraform | >= 1.11 | Defines all AWS resources (VPCs, EKS, RDS, IAM) as code files — no manual clicking in console |
+| AI Inference | Amazon Bedrock Nova Micro APAC Profile | apac.amazon.nova-micro-v1:0 | AI model that generates travel recommendations for users |
+| Secrets Management | AWS Secrets Manager | — | Stores database passwords and JWT keys securely; the app fetches them at startup |
+| Identity | IRSA plus GitHub OIDC Federation | — | Lets the app and the CI/CD pipeline prove their identity to AWS without using static access keys |
+| Monitoring | kube-prometheus-stack | 91.4.1 | Collects metrics from every pod and node; powers Grafana dashboards and Alertmanager |
+| Log Aggregation | Grafana Loki plus Promtail | 2.10.3 | Collects all container logs and makes them searchable in Grafana |
+| Ingress | AWS Load Balancer Controller | 3.5.0 | Creates and manages the AWS Application Load Balancer that receives public traffic |
+| Edge Security | AWS WAF v2 | — | Sits in front of the load balancer; blocks common web attacks and rate-limits abusive IPs |
+| CI/CD | GitHub Actions | — | Runs the automated build, test, scan, and deploy pipeline on every code push |
+
+---
+
+## Key Concepts Explained
+
+If you are new to some of these technologies, here is a plain-English explanation of the key concepts used throughout this project:
+
+**IRSA (IAM Roles for Service Accounts)** — Normally, to call AWS APIs from code, you need AWS access keys (a username and password for AWS). IRSA is a better approach: Kubernetes gives each pod a temporary token, and that token is exchanged with AWS for short-lived credentials. No keys are ever stored anywhere. If someone steals the pod's token, it expires in one hour and is useless outside of the specific role it is allowed to use.
+
+**Helm** — Think of Helm as a template engine for Kubernetes. Instead of writing separate YAML files for dev, test, and prod (which would be almost identical with minor differences), Helm lets you write one template and pass in different values per environment. The `values-dev.yaml` file says "1 replica, no WAF", `values-prod.yaml` says "2 replicas, WAF on, more memory".
+
+**Terraform** — Instead of logging into the AWS console and clicking "Create VPC", "Create EKS", "Create RDS" manually (which is error-prone and hard to repeat), Terraform lets you write what infrastructure you want in `.tf` files, and it creates/updates/destroys it for you. If you delete a resource, Terraform will re-create it exactly the same way.
+
+**HPA (Horizontal Pod Autoscaler)** — Kubernetes watches CPU usage. If pods get busy (above 70% CPU), HPA automatically adds more pods. If traffic drops, it removes pods to save money. This is what makes the application automatically handle traffic spikes.
+
+**PDB (Pod Disruption Budget)** — When Kubernetes needs to restart a node (for patching, scaling, etc.), PDB prevents it from removing too many pods at once. `minAvailable: 1` means Kubernetes guarantees at least one pod is always running — so the application never goes down during maintenance.
+
+**Namespace** — A Kubernetes namespace is like a folder. All TravelEase resources (pods, services, configmaps) live in the `travelease` namespace. Monitoring lives in `monitoring`. This keeps resources organised and allows per-namespace resource limits (quota, limitrange).
+
+**EKS (Elastic Kubernetes Service)** — Amazon's managed Kubernetes service. AWS manages the Kubernetes control plane (the brain of the cluster). You only manage the worker nodes (where your application pods actually run).
+
+---
+
+## How Everything Connects
+
+Before reading the detailed diagrams, here is the big picture in plain English:
+
+```
+Developer pushes code to GitHub
+        |
+        v
+GitHub Actions runs CI checks (tests, security scans, Helm lint)
+        |
+        v
+If all checks pass: build Docker image, scan it, push to ECR (Amazon's Docker registry)
+        |
+        v
+Helm deploys the image to the dev EKS cluster
+        |
+        v
+Automated smoke tests verify the app is responding correctly
+        |
+        v
+Same process repeats for test (staging) cluster
+        |
+        v
+A human reviewer approves the production deployment
+        |
+        v
+Helm deploys to the prod EKS cluster
+```
+
+Meanwhile, the running application:
+
+```
+User visits the website
+        |
+        v
+Request hits AWS WAF (blocks attacks) then the Application Load Balancer
+        |
+        v
+ALB routes the request to a Spring Boot pod inside EKS
+        |
+        v
+The pod (using IRSA identity) reads database credentials from AWS Secrets Manager
+        |
+        v
+The pod queries RDS PostgreSQL for data
+        |
+        v
+For AI recommendations: the pod calls Amazon Bedrock Nova Micro
+        |
+        v
+Response returns to the user
+```
+
+---
+
+## System Architecture
+
+### 1. Infrastructure Topology
+
+The following diagram shows how traffic flows from the public internet through AWS edge services into private EKS workloads, and how the application accesses managed AWS services.
+
+Note: All EKS nodes and the RDS database sit in **private subnets** — they have no public IP addresses. The only public entry point is the ALB, which itself sits behind WAF.
+
+```mermaid
+flowchart TB
+    subgraph Internet["Public Internet"]
+        User["User Browser or API Client"]
+    end
+
+    subgraph AWS["AWS Cloud Region ap-south-1 Mumbai"]
+        subgraph Edge["Edge Security and Ingress"]
+            WAF["AWS WAF v2
+AWSManagedRules plus Rate Limits
+Enabled on test and prod only"]
+            ALB["Application Load Balancer
+Internet-Facing, Multi-AZ"]
+        end
+
+        subgraph VPC["Environment VPC
+dev 10.10.0.0 16  |  test 10.20.0.0 16  |  prod 10.30.0.0 16"]
+            subgraph PublicSubnets["Public Subnets AZ-a and AZ-b"]
+                NAT["NAT Gateway
+Outbound internet for private subnets"]
+            end
+
+            subgraph PrivateSubnets["Private Workload Subnets AZ-a and AZ-b"]
+                subgraph EKS["Amazon EKS Cluster Kubernetes 1.31"]
+                    subgraph KubeSystem["kube-system"]
+                        ALBC["AWS Load Balancer Controller v3.5.0"]
+                        MS["Metrics Server v3.14.0"]
+                    end
+                    subgraph MonNS["monitoring"]
+                        Prom["Prometheus and Alertmanager"]
+                        Grafana["Grafana"]
+                        Loki["Loki and Promtail"]
+                    end
+                    subgraph AppNS["travelease namespace"]
+                        SA["ServiceAccount travelease-app
+IRSA Role env-app-irsa"]
+                        Pods["TravelEase Spring Boot Pods
+HPA 1 to 6 replicas
+PDB minAvailable 1"]
+                    end
+                end
+
+                subgraph DBSubnets["Private Database Subnets AZ-a and AZ-b"]
+                    RDS[("Amazon RDS PostgreSQL 16.9
+gp3 Encrypted Storage
+Multi-AZ on prod")]
+                end
+            end
+        end
+
+        subgraph Managed["AWS Managed Services"]
+            SM["AWS Secrets Manager
+travelease/env/app-secrets"]
+            BEDROCK["Amazon Bedrock
+apac.amazon.nova-micro-v1:0
+Nova Micro APAC Inference Profile"]
+            ECR["Amazon ECR
+Shared Registry
+Immutable Tags plus Scan on Push"]
+            S3Logs["S3 ALB Access Logs
+Glue Catalog plus Athena"]
+        end
+    end
+
+    User -->|HTTP or HTTPS| WAF
+    WAF --> ALB
+    ALB -->|Target-Type ip Port 8080| Pods
+    Pods -.->|IRSA identity via projected token| SA
+    SA -.->|GetSecretValue at pod startup| SM
+    Pods -->|JDBC Port 5432| RDS
+    Pods -->|InvokeModel AI recommendations| BEDROCK
+    ECR -.->|Image pull on deploy| Pods
+    ALB -.->|Access log delivery| S3Logs
+```
+
+---
+
+### 2. Secret Resolution and IRSA Flow
+
+Rather than using third-party secret synchronisation operators, the application uses a Spring Boot `EnvironmentPostProcessor` that runs before any beans are created. This ensures database credentials are loaded from AWS Secrets Manager before `DataSourceAutoConfiguration` binds connection properties.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Kubelet as Kubernetes Kubelet
+    participant Container as TravelEase Container
+    participant PostProc as SecretsEnvironmentPostProcessor
+    participant STS as AWS STS
+    participant SM as AWS Secrets Manager
+    participant Spring as Spring Application Context
+    participant RDS as Amazon RDS PostgreSQL
+
+    Kubelet->>Container: Mount projected ServiceAccount token
+    Kubelet->>Container: Inject AWS_ROLE_ARN and AWS_REGION env vars
+    Container->>PostProc: postProcessEnvironment at HIGHEST_PRECEDENCE
+
+    alt SECRET_NAME is not set (Local Development)
+        PostProc-->>Container: Skip AWS calls, use local defaults from application.yml
+    else SECRET_NAME is set (EKS Cloud)
+        PostProc->>STS: AssumeRoleWithWebIdentity using projected token
+        STS-->>PostProc: Return temporary IRSA credentials
+        PostProc->>SM: GetSecretValue for travelease/env/app-secrets
+        SM-->>PostProc: Return JSON with db_host, db_user, db_password, jwt_secret
+        PostProc->>PostProc: Inject all fields into Spring MutablePropertySources
+    end
+
+    PostProc-->>Spring: Environment ready with production credentials
+    Spring->>RDS: DataSourceAutoConfiguration creates HikariCP pool
+    Spring->>RDS: Flyway runs migration scripts V1 and V2
+    Spring->>Kubelet: Readiness probe returns 200 on /actuator/health/readiness
+```
+
+**Why this approach over External Secrets Operator:**
+
+| Concern | External Secrets Operator | This Implementation |
+| :--- | :--- | :--- |
+| Cluster components required | ESO controller plus ClusterSecretStore CRDs | None — native AWS SDK only |
+| Secret visibility | Synced into Kubernetes Secret object in etcd | Never written to etcd — in-memory only |
+| Bootstrap complexity | Requires ESO to be installed and healthy first | No dependency; fails fast if IRSA is misconfigured |
+| IAM scope | Separate IRSA role for ESO service account | Single IRSA role scoped to app service account |
+
+---
+
+### 3. CI/CD Pipeline and Promotion Flow
+
+Every pull request triggers the CI workflow. Every push to `main` triggers the full CD pipeline. The pipeline promotes the same Docker image tagged by git SHA through dev, test, and then waits for a named reviewer to approve before deploying to production.
+
+```mermaid
+flowchart TD
+    subgraph Triggers["Code Events"]
+        PR["Pull Request opened or updated"]
+        Push["Push to main branch"]
+    end
+
+    subgraph CI["CI Workflow ci.yml on every Pull Request"]
+        UT["Unit Tests JUnit 5 plus Mockito"]
+        IT["Integration Tests Testcontainers plus PostgreSQL"]
+        OWASP["OWASP Dependency-Check Fail on CVSS >= 7"]
+        TF["Terraform Validate and Format Check All 10 modules"]
+        HL["Helm Lint dev test prod value sets"]
+        UT --> IT --> OWASP --> TF --> HL
+    end
+
+    subgraph CD["CD Workflow cd-pipeline.yml on push to main"]
+        Build["Maven Package Build JAR"]
+        Docker["Docker Build Multi-stage distroless image"]
+        Trivy["Trivy Container Scan Block on HIGH or CRITICAL CVEs"]
+        ECR["Push to Amazon ECR Tag: git SHA"]
+
+        subgraph Dev["Dev Stage"]
+            DeployDev["helm upgrade install Cluster dev Namespace travelease"]
+            SmokeDev["Smoke Test Assert /actuator/health returns 200"]
+        end
+
+        subgraph Test["Test Stage"]
+            DeployTest["helm upgrade install Cluster test WAF enabled"]
+            SmokeTest["Smoke Test Verify all endpoints"]
+        end
+
+        subgraph ProdGate["Production Gate"]
+            Summary["Post pipeline summary as commit comment"]
+            Gate{"GitHub Environment Protection Named reviewer must approve"}
+            DeployProd["helm upgrade install Cluster prod HA 2 replicas PDB WAF"]
+            SmokeProd["Final production verification"]
+        end
+
+        Notify["Email notification on pipeline failure"]
+    end
+
+    PR --> UT
+    Push --> Build --> Docker --> Trivy --> ECR
+    ECR --> DeployDev --> SmokeDev
+    SmokeDev --> DeployTest --> SmokeTest
+    SmokeTest --> Summary --> Gate
+    Gate -->|Approved| DeployProd --> SmokeProd
+    DeployDev & DeployTest & DeployProd -.->|on failure| Notify
+```
+
+---
+
+### 4. Observability Stack
+
+Metrics, logs, and ALB access data are collected from three independent sources and unified in a single Grafana instance per cluster.
+
+```mermaid
+flowchart LR
+    subgraph Sources["Data Sources"]
+        AppPods["TravelEase Pods Spring Boot Actuator /actuator/prometheus"]
+        Kubelet["cAdvisor and Kubelet Node and container metrics"]
+        AppLogs["Container stdout JSON structured logs"]
+        ALBLogs["ALB Access Logs Delivered to S3 every 5 minutes"]
+    end
+
+    subgraph Collectors["Collection Layer"]
+        ServiceMonitor["ServiceMonitor CRD Scrape interval 30s"]
+        NodeExporter["Node Exporter DaemonSet"]
+        Promtail["Promtail DaemonSet Tail /var/log/containers"]
+        GlueAthena["Glue Crawler plus Athena Table"]
+    end
+
+    subgraph Storage["Storage Layer"]
+        Prometheus["Prometheus TSDB Retention 3 days kube-prometheus-stack v91.4.1"]
+        LokiStore["Grafana Loki Chunk storage loki-stack v2.10.3"]
+    end
+
+    subgraph Dashboards["Presentation Layer"]
+        Grafana["Grafana Port-forward 3000:80 Admin password from Secrets Manager"]
+    end
+
+    AppPods -->|HTTP scrape| ServiceMonitor --> Prometheus
+    Kubelet --> NodeExporter --> Prometheus
+    AppLogs --> Promtail --> LokiStore
+    ALBLogs --> GlueAthena
+
+    Prometheus -->|PromQL queries| Grafana
+    LokiStore -->|LogQL queries| Grafana
+    GlueAthena -->|SQL plugin| Grafana
+```
+
+---
+
+## Repository Structure
 
 ```
 travelease-aws-eks-cicd/
-│
-├── app/                        ← The Spring Boot Java application (the actual product)
-│   ├── src/main/java/          ← All Java source code
-│   │   └── ai/travelease/
-│   │       ├── domain/         ← Database models: User, Booking, Destination, Category
-│   │       ├── repository/     ← Database access (Spring Data JPA)
-│   │       ├── service/        ← Business logic: BookingService, RecommendationService, etc.
-│   │       ├── web/            ← REST API controllers (AuthController, BookingController, etc.)
-│   │       ├── dto/            ← Request/response data transfer objects
-│   │       └── config/         ← Security config, AWS Bedrock config, etc.
-│   ├── Dockerfile              ← How to package the app into a Docker image
-│   ├── docker-compose.yml      ← Run the app + PostgreSQL locally with one command
-│   └── pom.xml                 ← Maven dependencies (Spring Boot, JWT, AWS SDK, etc.)
-│
-├── terraform/                  ← All AWS infrastructure defined as code (Terraform)
-│   ├── bootstrap/              ← One-time setup: S3 bucket for storing Terraform state
-│   ├── environments/
-│   │   ├── shared/             ← Shared ECR (Docker image registry) — used by all envs
-│   │   ├── dev/                ← Development environment infrastructure
-│   │   ├── test/               ← Testing environment infrastructure (+ WAF enabled)
-│   │   └── prod/               ← Production environment infrastructure (+ WAF + approvals)
-│   └── modules/                ← Reusable Terraform building blocks
-│       ├── vpc/                ← Creates an isolated network (VPC, subnets, NAT gateway)
-│       ├── eks/                ← Creates the Kubernetes cluster
-│       ├── rds/                ← Creates the PostgreSQL database
-│       ├── waf/                ← Web Application Firewall (blocks malicious traffic)
-│       ├── ecr/                ← Elastic Container Registry (stores Docker images)
-│       ├── secrets-manager/    ← Stores DB passwords and JWT secrets securely
-│       ├── security-groups/    ← Firewall rules between components
-│       ├── irsa-alb-controller/← AWS IAM role for the Kubernetes load balancer controller
-│       ├── irsa-bedrock/       ← AWS IAM role for the app to call Bedrock AI
-│       ├── irsa-external-secrets/ ← AWS IAM role to fetch secrets into Kubernetes
-│       └── access-logging/     ← S3 bucket + Glue/Athena for ALB access log analysis
-│
-├── helm/travelease/            ← Kubernetes deployment templates (Helm chart)
-│   ├── templates/
-│   │   ├── deployment.yaml     ← How to run the app in Kubernetes
-│   │   ├── service.yaml        ← Internal networking for the app pods
-│   │   ├── ingress.yaml        ← Exposes the app to the internet via ALB
-│   │   ├── externalsecret.yaml ← Pulls secrets from AWS Secrets Manager into K8s
-│   │   ├── hpa.yaml            ← Auto-scales pods based on CPU usage
-│   │   ├── pdb.yaml            ← Ensures at least 1 pod stays running during updates
-│   │   ├── configmap.yaml      ← Non-sensitive app configuration
-│   │   ├── serviceaccount.yaml ← Kubernetes identity linked to AWS IAM role
-│   │   └── servicemonitor.yaml ← Tells Prometheus to scrape metrics from this app
-│   ├── values.yaml             ← Default config values
-│   ├── values-dev.yaml         ← Dev environment overrides
-│   ├── values-test.yaml        ← Test environment overrides
-│   └── values-prod.yaml        ← Prod environment overrides (HA, more replicas)
-│
-├── .github/workflows/
-│   ├── ci.yml                  ← Runs on every Pull Request: compile, test, security scan
-│   └── cd-pipeline.yml         ← Runs on push to main: build image → deploy dev → test → prod
-│
-├── scripts/
-│   ├── bootstrap-cluster.sh    ← Installs required tools onto a fresh EKS cluster
-│   ├── smoke-test.sh           ← Hits the app's health endpoint to verify it's alive
-│   └── destroy-all.sh          ← Tears down all infrastructure (prod → test → dev → shared)
-│
-├── APPROACH.md                 ← Design decisions and architectural reasoning
-└── CHALLENGES.md               ← Problems faced and how they were solved
+|
+|-- .github/workflows/
+|   |-- ci.yml                      Pull request checks: unit tests, integration tests,
+|   |                               OWASP scan, Terraform validate, Helm lint
+|   `-- cd-pipeline.yml             Multi-environment CD: build, scan, push ECR,
+|                                   deploy dev, test, manual gate, deploy prod
+|
+|-- app/                            Spring Boot application source
+|   |-- src/main/java/ai/travelease/
+|   |   |-- config/
+|   |   |   |-- BedrockConfig.java              Bedrock runtime client ap-south-1 region
+|   |   |   |-- SecretsConfig.java              AWS SecretsManagerClient bean
+|   |   |   |-- SecretsEnvironmentPostProcessor.java
+|   |   |   |                                   Loads secrets before Spring beans start.
+|   |   |   |                                   Registered in META-INF/spring/*.imports
+|   |   |   |-- SecurityConfig.java             SecurityFilterChain public actuator paths
+|   |   |   `-- WebConfig.java                  MVC interceptors
+|   |   |-- domain/                 JPA entities: User, Booking, Destination, Category
+|   |   |-- dto/                    Request and response transfer objects
+|   |   |-- repository/             Spring Data JPA repositories
+|   |   |-- service/                Business logic and Bedrock Nova Micro integration
+|   |   `-- web/                    Spring MVC controllers and Thymeleaf templates
+|   |-- src/main/resources/
+|   |   |-- application.yml         Central configuration with safe local defaults
+|   |   |-- application-dev.yml     Development profile overrides
+|   |   |-- application-prod.yml    Production HikariCP and logging settings
+|   |   `-- db/migration/           Flyway SQL: V1 schema creation, V2 seed data
+|   |-- Dockerfile                  Multi-stage build distroless final image
+|   |-- docker-compose.yml          Local stack: application plus PostgreSQL
+|   `-- pom.xml                     Maven: Spring Boot 3.3.4, AWS SDK v2, Flyway
+|
+|-- terraform/
+|   |-- bootstrap/                  S3 state bucket with native conditional locking
+|   |-- environments/
+|   |   |-- shared/                 Shared ECR repository one per AWS account
+|   |   |-- dev/                    dev VPC 10.10.0.0/16 plus EKS cluster named dev
+|   |   |-- test/                   test VPC 10.20.0.0/16 plus EKS cluster named test
+|   |   `-- prod/                   prod VPC 10.30.0.0/16 plus EKS cluster named prod
+|   `-- modules/
+|       |-- vpc/                    Multi-AZ VPC subnets NAT and subnet tags for ALB
+|       |-- security-groups/        Zero-trust ingress/egress rules EKS to RDS
+|       |-- eks/                    EKS managed cluster node group OIDC provider
+|       |-- rds/                    RDS PostgreSQL KMS encryption subnet group
+|       |-- secrets-manager/        Secret: travelease/env/app-secrets
+|       |-- irsa-app/               Combined IRSA role: Bedrock plus Secrets Manager
+|       |-- irsa-alb-controller/    IRSA role for ALB Controller service account
+|       |-- waf/                    AWS WAF v2 with AWSManagedRules rate limiting
+|       |-- access-logging/         S3 bucket Glue catalog Athena table for ALB logs
+|       `-- ecr/                    ECR repository lifecycle policy scan on push
+|
+|-- helm/travelease/
+|   |-- templates/
+|   |   |-- deployment.yaml         Pod spec: non-root user probes resource limits
+|   |   |-- service.yaml            ClusterIP service on port 80 to 8080
+|   |   |-- ingress.yaml            ALB Ingress with WAF and access log annotations
+|   |   |-- serviceaccount.yaml     Annotated with IRSA role ARN
+|   |   |-- configmap.yaml          Non-sensitive env vars: region model ID profile
+|   |   |-- hpa.yaml                HPA scales on CPU utilisation
+|   |   |-- pdb.yaml                PodDisruptionBudget minAvailable: 1
+|   |   |-- quota.yaml              ResourceQuota per namespace env-configurable
+|   |   |-- limitrange.yaml         Container-level CPU/memory default and max limits
+|   |   `-- servicemonitor.yaml     Prometheus Operator scrape definition
+|   |-- values.yaml                 Base defaults all environments inherit these
+|   |-- values-dev.yaml             Dev overrides: 1 replica no WAF
+|   |-- values-test.yaml            Test overrides: WAF enabled
+|   `-- values-prod.yaml            Prod overrides: 2 replicas HPA max 6 WAF enabled
+|
+|-- platform/
+|   `-- grafana-values-common.yaml  Common Helm values for kube-prometheus-stack
+|
+|-- scripts/
+|   |-- bootstrap-cluster.sh        Installs cluster add-ons in order:
+|   |                               1. AWS Load Balancer Controller
+|   |                               2. Metrics Server
+|   |                               3. kube-prometheus-stack
+|   |                               4. Loki Stack
+|   |-- smoke-test.sh               HTTP health checks with exponential backoff
+|   `-- destroy-all.sh              Safe sequential teardown: prod to test to dev to shared
+|
+|-- APPROACH.md                     Architectural Decision Records
+`-- README.md                       This file
 ```
 
 ---
 
-## 🏗️ System Architecture
-
-Here is how all the pieces fit together:
-
-```
-User Browser
-     │
-     ▼
-[AWS WAF] ──── blocks bad traffic (test/prod only)
-     │
-     ▼
-[Application Load Balancer]
-     │
-     ▼
-[EKS Kubernetes Cluster]
-  └── Spring Boot App (pods, auto-scaled with HPA)
-        │                  │
-        ▼                  ▼
-  [RDS PostgreSQL]   [Amazon Bedrock]
-   (private subnet)   (Nova Micro AI, us-east-1)
-        │
-   [AWS Secrets Manager] ──► [External Secrets Operator] ──► K8s Secret
-```
-
-### 3 Completely Isolated Environments
-
-| Environment | VPC CIDR | WAF | Purpose |
-|---|---|---|---|
-| **dev** | 10.10.0.0/16 | ❌ Off (saves cost) | Active development, fast deploys |
-| **test** | 10.20.0.0/16 | ✅ On | Integration testing, smoke tests |
-| **prod** | 10.30.0.0/16 | ✅ On | Live production — requires manual approval to deploy |
-
-Each environment has its own VPC, EKS cluster, RDS database, and Secrets Manager entry. They share one ECR registry and one S3 state bucket.
-
----
-
-## ⚙️ REST API Endpoints
-
-Once the app is running (locally or on EKS), these are the available endpoints:
-
-| Method | Endpoint | What it does |
-|---|---|---|
-| `POST` | `/api/auth/register` | Create a new user account |
-| `POST` | `/api/auth/login` | Login and receive a JWT token |
-| `GET` | `/api/destinations` | List all available travel destinations |
-| `GET` | `/api/destinations/{id}` | Get details of a single destination |
-| `POST` | `/api/bookings` | Create a new booking (auth required) |
-| `GET` | `/api/bookings` | List your bookings (auth required) |
-| `GET` | `/api/bookings/{id}` | Get a specific booking (auth required) |
-| `DELETE` | `/api/bookings/{id}` | Cancel a booking (auth required) |
-| `POST` | `/api/recommendations` | Get AI-powered trip recommendations |
-| `GET` | `/actuator/health` | Health check (used by Kubernetes probes) |
-| `GET` | `/actuator/prometheus` | Metrics endpoint (scraped by Prometheus) |
-
----
-
-## 🛠️ Prerequisites — What You Need Installed
-
-Install these tools before you start:
-
-| Tool | Min Version | What it's for | Install Link |
-|------|-------------|---------------|--------------|
-| **AWS CLI** | v2 | Talk to AWS from your terminal | [Install](https://aws.amazon.com/cli/) |
-| **Terraform** | ≥ 1.11 | Create/manage all AWS infrastructure | [Install](https://developer.hashicorp.com/terraform/downloads) |
-| **kubectl** | ≥ 1.31 | Talk to Kubernetes clusters | [Install](https://kubernetes.io/docs/tasks/tools/) |
-| **Helm** | ≥ 3.15 | Deploy the app to Kubernetes | [Install](https://helm.sh/docs/intro/install/) |
-| **Docker** | ≥ 24 | Build and run containers locally | [Install](https://docs.docker.com/get-docker/) |
-| **Java** | 17 (Temurin) | Run the Spring Boot app locally | [Install](https://adoptium.net/) |
-| **Maven** | 3.9 | Build the Java application | Bundled in the build Docker image |
-
-You also need:
-- An **AWS account** with permissions to create EKS, VPC, RDS, ECR, IAM, Secrets Manager, Bedrock
-- AWS CLI configured: run `aws configure` with your Access Key and Secret Key
-- A **GitHub account** with this repo forked (for CI/CD)
-
----
-
-## 🚀 How to Run Locally (Quickest Way — No AWS Needed)
-
-If you just want to run the app on your laptop without any AWS infrastructure:
-
-```bash
-# 1. Go to the app folder
-cd app
-
-# 2. Build and start both the app and a local PostgreSQL database
-docker-compose up --build
-
-# 3. Open the app in your browser
-# → http://localhost:8080
-
-# 4. To stop everything
-docker-compose down
-```
-
-> **Note:** The AI recommendation feature is disabled by default in local mode (`RECOMMENDATION_ENABLED=false`). You do not need any AWS credentials to run locally.
-
-To test the AI feature locally with real AWS credentials:
-1. Set up `~/.aws/credentials` with your AWS keys
-2. Edit `app/docker-compose.yml` and set `RECOMMENDATION_ENABLED: "true"`
-3. Restart with `docker-compose up`
-
----
-
-## ☁️ Full AWS Deployment — Step by Step
-
-### Step 1: Bootstrap (One-time setup — do this once ever)
-
-This creates the S3 bucket where Terraform stores its state files.
-
-```bash
-cd terraform/bootstrap
-cp terraform.tfvars.example terraform.tfvars
-# Open terraform.tfvars and set a unique bucket_name, e.g.:
-# bucket_name = "travelease-tfstate-lakshya6373"
-
-terraform init
-terraform apply -auto-approve
-
-# Note the bucket_name output — you will need it in the next step
-```
-
-Now create the shared ECR registry (Docker image storage used by all environments):
-
-```bash
-cd ../environments/shared
-terraform init
-terraform apply -auto-approve
-
-# Note the ecr_repository_url from the output — paste it into GitHub Variables
-```
-
-### Step 2: Update All Backend Config Files
-
-In every `terraform/environments/<env>/backend.tf`, replace `<YOUR-UNIQUE-SUFFIX>` with the bucket name from Step 1.
-
-```bash
-# Do this for: environments/dev, environments/test, environments/prod, environments/shared
-# Example change inside backend.tf:
-# bucket = "travelease-tfstate-<YOUR-UNIQUE-SUFFIX>"
-# becomes:
-# bucket = "travelease-tfstate-lakshya6373"
-```
-
-### Step 3: Enable Amazon Bedrock AI (One-time, manual)
-
-The AI recommendation feature requires manual model access approval in AWS:
-
-1. Open AWS Console → switch to **us-east-1** region
-2. Go to **Amazon Bedrock → Model access** (left menu)
-3. Click **Manage model access**
-4. Check **Amazon Nova Micro** → click **Request model access**
-5. Approval is usually instant (on-demand access)
-
-### Step 4: Configure GitHub Repository Settings
-
-Go to your GitHub repo → **Settings** and configure the following:
-
-**Environments** (`Settings → Environments → New environment`):
-
-| Environment Name | Protection Rule |
-|---|---|
-| `dev` | None (deploys automatically) |
-| `test` | None (deploys after smoke tests pass) |
-| `production` | ✅ **Required reviewers: add yourself** |
-
-**Repository Secrets** (`Settings → Secrets and variables → Actions → New repository secret`):
-
-| Secret Name | Value |
-|---|---|
-| `SMTP_USERNAME` | Your email address (for failure notification emails) |
-| `SMTP_PASSWORD` | Your email app password |
-
-**Repository Variables** (`Settings → Secrets and variables → Actions → Variables tab`):
-
-| Variable Name | Example Value |
-|---|---|
-| `AWS_REGION` | `ap-south-1` |
-| `ECR_REGISTRY` | `123456789012.dkr.ecr.ap-south-1.amazonaws.com` |
-| `SHARED_ECR_PUSH_ROLE_ARN` | IAM role ARN from the `shared` Terraform output |
-
-**Per-Environment Variables** (set inside each GitHub Environment):
-
-| Variable Name | Description |
-|---|---|
-| `DEV_DEPLOY_ROLE_ARN` | IAM role ARN for deploying to dev EKS cluster |
-| `TEST_DEPLOY_ROLE_ARN` | IAM role ARN for deploying to test EKS cluster |
-| `PROD_DEPLOY_ROLE_ARN` | IAM role ARN for deploying to prod EKS cluster |
-
-### Step 5: Deploy the Dev Environment
-
-```bash
-cd terraform/environments/dev
-
-cp terraform.tfvars.example terraform.tfvars
-# Open terraform.tfvars — most values are pre-filled. Just review and confirm.
-
-# Set sensitive values as environment variables (NEVER put passwords in files)
-export TF_VAR_db_master_password="YourStrongPasswordHere123!"
-export TF_VAR_jwt_secret="your-random-jwt-secret-at-least-32-chars"
-
-terraform init
-terraform plan     # Review what will be created (~30 resources)
-terraform apply    # Type 'yes' to confirm — takes 15-20 minutes
-```
-
-### Step 6: Connect kubectl to the Dev Cluster
-
-```bash
-aws eks update-kubeconfig --name travelease-dev --region ap-south-1
-
-# Verify connection
-kubectl get nodes
-# You should see worker nodes listed with status "Ready"
-```
-
-### Step 7: Bootstrap the Cluster (Install required Kubernetes tools)
-
-```bash
-./scripts/bootstrap-cluster.sh travelease-dev dev
-
-# This installs (takes 5-10 minutes):
-# - AWS Load Balancer Controller   → automatically creates ALBs for Ingress resources
-# - External Secrets Operator      → syncs secrets from AWS Secrets Manager into K8s
-# - kube-prometheus-stack          → Prometheus + Grafana + Alertmanager
-# - Loki + Promtail                → log collection and aggregation
-```
-
-### Step 8: Deploy Test and Prod (Repeat Steps 5–7)
-
-```bash
-# Test environment
-cd terraform/environments/test
-export TF_VAR_db_master_password="TestEnvPassword123!"
-export TF_VAR_jwt_secret="test-jwt-secret-32chars-minimum"
-terraform init && terraform apply
-aws eks update-kubeconfig --name travelease-test --region ap-south-1
-./scripts/bootstrap-cluster.sh travelease-test test
-
-# Prod environment
-cd terraform/environments/prod
-export TF_VAR_db_master_password="ProdStrongPassword456!"
-export TF_VAR_jwt_secret="prod-jwt-secret-32chars-minimum"
-terraform init && terraform apply
-aws eks update-kubeconfig --name travelease-prod --region ap-south-1
-./scripts/bootstrap-cluster.sh travelease-prod prod
-```
-
-### Step 9: Trigger Your First Deployment
-
-```bash
-# Push any change to the main branch to trigger the full CD pipeline
-git push origin main
-
-# Watch it in GitHub → Actions tab
-# Order: build image → dev → smoke test → test → smoke test → ⏸ approval → prod
-```
-
----
-
-## 🔄 CI/CD Pipeline — How Deployments Work
-
-### CI Pipeline (every Pull Request)
-
-When you open or update a Pull Request, GitHub Actions automatically runs:
-
-1. **Compile** the Java code with Maven
-2. **Unit tests** with JUnit
-3. **OWASP Dependency-Check** — fails if any Maven dependency has a CVSS score ≥ 7
-4. **Trivy image scan** — fails if HIGH or CRITICAL CVEs are found in the Docker image
-
-> All checks must pass before the PR can be merged.
-
-### CD Pipeline (every push to `main`)
-
-```
-Push to main
-    ↓
-Build Docker image (tagged with Git commit SHA)
-Push to ECR
-    ↓
-Deploy to Dev EKS  →  Run smoke test (hits /actuator/health)
-    ↓  (on success)
-Deploy to Test EKS →  Run smoke test
-    ↓  (on success)
-⏸ PAUSE — Wait for manual approval in GitHub UI
-    ↓  (you click "Approve" in the GitHub Actions page)
-Deploy to Prod EKS →  Run smoke test
-    ↓
-✅ Done! New version is live in production.
-```
-
-The Docker image tag is the **Git commit SHA** (e.g., `travelease:a91b911`), making every deployment fully traceable.
-
----
-
-## 📊 Monitoring & Observability
-
-Once deployed, you have a full observability stack available.
-
-### Access Grafana (Metrics Dashboards)
-
-```bash
-kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80
-# Open: http://localhost:3000
-# Username: admin
-# Get password:
-kubectl get secret -n monitoring kube-prometheus-stack-grafana \
-  -o jsonpath="{.data.admin-password}" | base64 --decode
-```
-
-Pre-built dashboards show:
-- Kubernetes cluster health (CPU, memory, pod restarts)
-- Application metrics (request rate, latency, error rate)
-- JVM metrics (heap memory, GC pauses, thread count)
-- ALB access logs via Glue/Athena
-
-### Access Prometheus (Raw Metrics)
-
-```bash
-kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090
-# Open: http://localhost:9090
-```
-
-### View Application Logs (Loki in Grafana)
-
-In Grafana → **Explore** → Select datasource **"Loki"** → Enter query:
-```
-{namespace="travelease"}
-```
-
-### Get the Public Application URL
-
-```bash
-kubectl get ingress -n travelease
-# The ADDRESS column shows the public ALB URL (takes ~2 min to provision on first deploy)
-```
-
----
-
-## 🔐 Security Controls
-
-| Control | How It's Implemented |
-|---|---|
-| **No static AWS keys** | GitHub OIDC → `sts:AssumeRoleWithWebIdentity`; no credentials stored in GitHub Secrets |
-| **Secrets never in code** | DB passwords and JWT secrets live in AWS Secrets Manager, injected at pod runtime |
-| **Private subnets** | EKS nodes and RDS are in private subnets; only the ALB is in public subnets |
-| **WAF protection** | Blocks SQL injection, XSS, bad bots, and rate-limits requests (test + prod only) |
-| **Non-root containers** | App runs as user 1000; `runAsNonRoot: true` in pod security context |
-| **Image scanning** | Trivy blocks CI/CD if HIGH or CRITICAL CVEs found in Docker image |
-| **Dependency scanning** | OWASP Dependency-Check fails CI on any Maven dep with CVSS ≥ 7 |
-| **Least-privilege IAM** | ALB controller, Bedrock caller, External Secrets each have their own minimal IAM role |
-| **Shield Standard** | Automatic DDoS protection on all ALBs (no extra config needed) |
-| **Security Groups** | RDS only accepts connections from EKS node SG; nodes only accept from ALB SG on port 8080 |
-
----
-
-## 💰 Cost Guide
-
-Approximate cost if you spin up all 3 environments for a full day:
-
-| Resource | Approx. Cost |
-|---|---|
-| 3× EKS clusters (`t3.medium` nodes) | ~$0.30/hour each |
-| 3× RDS PostgreSQL (`db.t3.micro`) | ~$0.017/hour each |
-| 3× NAT Gateways | ~$0.045/hour each |
-| ECR + S3 (state + logs) | Cents |
-| **Full demo (build + deploy + destroy same day)** | **< $5 total** |
-
-**Cost-saving decisions built into the design:**
-- 1 NAT Gateway per VPC (not 1 per AZ → saves ~$65/month if left running)
-- `t3.small/medium` node sizes with HPA scaling to minimum when idle
-- WAF disabled on dev (saves ~$9/month per dev env)
-- S3 native state locking — no DynamoDB table needed
-- ECR lifecycle policy automatically removes old images
-- Prometheus stores only 3 days of metrics (minimal EBS cost)
-
----
-
-## 🗑️ Teardown — Destroy Everything
-
-When you are done, destroy all infrastructure to stop AWS charges:
-
-```bash
-./scripts/destroy-all.sh
-# Destroys in safe order: prod → test → dev → shared
-# The S3 state bucket and ECR are kept by default (cost: cents/month)
-# To also delete those:
-cd terraform/bootstrap && terraform destroy
-```
-
----
-
-## 📁 Key Configuration Files Reference
-
-| File | What to Edit |
-|---|---|
-| `terraform/environments/dev/terraform.tfvars` | Dev cluster size, DB instance type, region |
-| `terraform/environments/prod/terraform.tfvars` | Prod replica count, node size |
-| `helm/travelease/values-prod.yaml` | Pod replicas, resource requests/limits for prod |
-| `helm/travelease/values.yaml` | Default app configuration for all environments |
-| `.github/workflows/cd-pipeline.yml` | CI/CD pipeline steps, timings, and environment settings |
-| `app/docker-compose.yml` | Local development environment config |
-
----
-
-## ❓ Troubleshooting
-
-**Pods are not starting:**
-```bash
-kubectl get pods -n travelease
-kubectl describe pod <pod-name> -n travelease
-kubectl logs <pod-name> -n travelease
-```
-
-**External Secrets not syncing (app can't get DB password):**
-```bash
-kubectl get externalsecret -n travelease
-kubectl describe externalsecret travelease-secrets -n travelease
-# Check the IRSA role has GetSecretValue permission on Secrets Manager
-```
-
-**ALB not getting a public address:**
-```bash
-kubectl get ingress -n travelease
-kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
-```
-
-**Terraform state lock error (from a crashed apply):**
-```bash
-terraform force-unlock <LOCK_ID>
-```
-
-**kubectl shows "Unauthorized" after switching clusters:**
-```bash
-aws eks update-kubeconfig --name travelease-dev --region ap-south-1
-```
-
----
-
-## 📚 Further Reading
-
-- [APPROACH.md](./APPROACH.md) — Why certain architectural decisions were made
-- [CHALLENGES.md](./CHALLENGES.md) — Problems encountered during the build and how they were solved
-- [Amazon EKS Docs](https://docs.aws.amazon.com/eks/)
-- [Amazon Bedrock Docs](https://docs.aws.amazon.com/bedrock/)
-- [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
-- [Spring Boot Reference](https://docs.spring.io/spring-boot/docs/current/reference/html/)
-
----
-
-## Architecture
-
-```mermaid
-graph TB
-    subgraph Internet
-        U[User Browser]
-    end
-
-    subgraph AWS ap-south-1
-        subgraph "GitHub Actions"
-            CI[CI — PR Checks]
-            CD[CD Pipeline\nbuild → dev → test → approval → prod]
-        end
-
-        subgraph ECR["ECR (Shared)"]
-            IMG[travelease:sha]
-        end
-
-        subgraph "Dev VPC 10.10.0.0/16"
-            ALB_D[ALB] --> APP_D[Spring Boot\nEKS Dev]
-            APP_D --> RDS_D[(RDS PostgreSQL\nDev)]
-        end
-
-        subgraph "Test VPC 10.20.0.0/16"
-            WAF_T[WAF] --> ALB_T[ALB] --> APP_T[Spring Boot\nEKS Test]
-            APP_T --> RDS_T[(RDS PostgreSQL\nTest)]
-        end
-
-        subgraph "Prod VPC 10.30.0.0/16"
-            WAF_P[WAF] --> ALB_P[ALB] --> APP_P[Spring Boot\nEKS Prod]
-            APP_P --> RDS_P[(RDS PostgreSQL\nProd)]
-        end
-
-        subgraph "Secrets"
-            SM[AWS Secrets Manager\n3 secrets — one per env]
-            ESO[External Secrets\nOperator]
-            SM --> ESO --> K8S_SECRET[K8s Secret]
-        end
-
-        subgraph "Observability"
-            PROM[Prometheus] --> GRAF[Grafana]
-            LOKI[Loki + Promtail] --> GRAF
-            S3_LOGS[S3 ALB Logs] --> ATHENA[Glue/Athena] --> GRAF
-        end
-    end
-
-    subgraph "AWS us-east-1"
-        BEDROCK[Amazon Bedrock\nNova Micro]
-    end
-
-    U --> ALB_D & ALB_T & ALB_P
-    APP_D & APP_T & APP_P --> BEDROCK
-    CD --> ECR --> APP_D
-    APP_D -.->|smoke test pass| APP_T
-    APP_T -.->|manual approval| APP_P
-```
+## Environment Configuration
+
+Three completely independent VPCs and EKS clusters ensure zero blast radius between environments.
+
+| Parameter | Development | Test / Staging | Production |
+| :--- | :--- | :--- | :--- |
+| Cluster name | `dev` | `test` | `prod` |
+| VPC CIDR | `10.10.0.0/16` | `10.20.0.0/16` | `10.30.0.0/16` |
+| Worker nodes | 1 x `t3.medium` | 1 x `t3.medium` | 2 x `t3.medium` Multi-AZ |
+| Pod replicas HPA | 1 min 2 max | 1 min 3 max | 2 min 6 max |
+| HPA CPU target | 70% | 70% | 65% |
+| RDS instance | `db.t3.micro` | `db.t3.micro` | `db.t3.small` |
+| RDS Multi-AZ | No | No | Yes |
+| AWS WAF v2 | Disabled | Enabled | Enabled |
+| Secret path | `travelease/dev/app-secrets` | `travelease/test/app-secrets` | `travelease/prod/app-secrets` |
+| Deployment gate | Automatic after CI | Automatic after dev smoke test | Manual reviewer approval |
+| Bedrock profile | `apac.amazon.nova-micro-v1:0` | `apac.amazon.nova-micro-v1:0` | `apac.amazon.nova-micro-v1:0` |
 
 ---
 
 ## Prerequisites
 
-| Tool | Version | Install |
-|------|---------|---------|
-| AWS CLI | v2 | [aws.amazon.com/cli](https://aws.amazon.com/cli/) |
-| Terraform | ≥ 1.11 | [terraform.io](https://developer.hashicorp.com/terraform/downloads) |
-| Helm | ≥ 3.15 | [helm.sh](https://helm.sh/docs/intro/install/) |
-| kubectl | ≥ 1.31 | [kubernetes.io](https://kubernetes.io/docs/tasks/tools/) |
-| Docker | ≥ 24 | [docker.com](https://docs.docker.com/get-docker/) |
-| Java | 17 (Temurin) | [adoptium.net](https://adoptium.net/) |
-| Maven | 3.9 | Included in build image |
+The following tools must be installed and available in your shell before running any commands.
+
+| Tool | Minimum Version | Purpose |
+| :--- | :--- | :--- |
+| AWS CLI | v2 | Authentication kubeconfig update ECR login |
+| Terraform | >= 1.11 | Infrastructure provisioning |
+| kubectl | >= 1.31 | Cluster interaction and verification |
+| Helm | >= 3.15 | Chart deployment and linting |
+| Docker | Latest | Local development and image builds |
+| Git | Latest | Source control and pipeline trigger |
+
+The AWS CLI must be configured with credentials that have sufficient permissions to create IAM roles, EKS clusters, RDS instances, VPCs, and ECR repositories.
 
 ---
 
-## Setup & Run
+## Local Development
 
-### 1. Bootstrap (one-time, by hand)
+You can run the full application stack on your local machine without any AWS account or cloud resources. Docker Compose starts both the Spring Boot application and a PostgreSQL database container together.
+
+The application is smart about its environment: when `SECRET_NAME` is not set (which it is not in local mode), it skips the AWS Secrets Manager call and uses the safe local defaults defined in `application-dev.yml`. This means you can develop and test the app with zero AWS dependency.
 
 ```bash
-# Create the Terraform state S3 bucket
-cd terraform/bootstrap
-cp terraform.tfvars.example terraform.tfvars   # edit bucket_name
-terraform init && terraform apply -auto-approve
-# Note the bucket_name output — paste it into every backend.tf (search <YOUR-UNIQUE-SUFFIX>)
+# 1. Clone the repository
+git clone https://github.com/Lakshya6373/travelease-aws-eks-cicd.git
+cd travelease-aws-eks-cicd/app
 
-# Create the shared ECR registry
-cd ../environments/shared
-terraform init && terraform apply -auto-approve
-# Note the ecr_repository_url output
+# 2. Build and start both containers (first time takes 2-3 minutes to download images)
+docker-compose up --build -d
+
+# 3. Watch the logs to confirm the app has started successfully
+#    You should see: "Started TravelEaseApplication in X seconds"
+docker-compose logs -f app
+
+# 4. Open the application in your browser
+#    http://localhost:8080
 ```
 
-### 2. Enable Bedrock (manual, once per AWS account)
+**What you will see at http://localhost:8080:**
+- A travel booking homepage with destination listings
+- User registration and login pages
+- Destination browsing and booking functionality
+- AI recommendations (note: these require a real Bedrock connection; locally they will return a fallback response)
 
-1. Go to AWS Console → Amazon Bedrock → Model access (`us-east-1` region)
-2. Request access to **Amazon Nova Micro**
-3. Wait for approval (usually instant for on-demand)
+**Useful local commands:**
 
-### 3. Deploy Dev Infrastructure
+```bash
+# Check if both containers are running
+docker-compose ps
+
+# Connect to the local PostgreSQL database directly
+docker exec -it $(docker-compose ps -q db) psql -U travelease -d travelease
+
+# Rebuild only the app container after a code change
+docker-compose up --build -d app
+
+# Stop and remove everything (including the database volume)
+docker-compose down -v
+```
+
+No AWS credentials or configuration are required in local mode.
+
+---
+
+## AWS Deployment Walkthrough
+
+The diagram below summarises the one-time manual steps required before automated CI/CD takes over all future deployments.
+
+```mermaid
+flowchart TD
+    A["Clone repository and configure AWS CLI"] --> B
+
+    subgraph OneTime["One-Time Bootstrap Done Once per Environment"]
+        B["Step 1: terraform apply bootstrap
+Create S3 state bucket"]
+        B --> C["Step 2: terraform apply shared
+Create ECR repository"]
+        C --> D["Step 3: Enable Bedrock model access
+AWS Console ap-south-1"]
+        D --> E["Step 4: terraform apply dev
+Create VPC EKS RDS IAM roles
+Duration: 12 to 15 minutes"]
+        E --> F["Step 5: aws eks update-kubeconfig
+Point kubectl at dev cluster"]
+        F --> G["Step 6: bash bootstrap-cluster.sh dev dev
+Install ALB Controller Metrics Server
+Prometheus Grafana Loki"]
+        G --> H["Step 7: Configure GitHub secrets and variables
+ECR_REGISTRY DEV_DEPLOY_ROLE_ARN etc."]
+    end
+
+    H --> I["Step 8: git push origin main
+Triggers GitHub Actions CD pipeline"]
+
+    subgraph Automated["Fully Automated from this point"]
+        I --> J["Build plus Trivy scan plus Push to ECR"]
+        J --> K["Deploy to dev plus smoke test"]
+        K --> L["Deploy to test plus smoke test"]
+        L --> M["Manual approval gate"]
+        M --> N["Deploy to prod plus smoke test"]
+    end
+```
+
+### Step 1 — Remote State and Shared Registry
+
+```bash
+cd terraform/bootstrap
+cp terraform.tfvars.example terraform.tfvars
+terraform init && terraform apply -auto-approve
+
+cd ../environments/shared
+terraform init && terraform apply -auto-approve
+terraform output ecr_repository_url
+```
+
+### Step 2 — Enable Bedrock Model Access
+
+1. Open the AWS Management Console and set your region to **ap-south-1** (Mumbai).
+2. Navigate to **Amazon Bedrock** then **Model access** in the left sidebar.
+3. Select **Manage model access** and enable **Amazon Nova Micro**.
+4. Save changes. Access is granted immediately at no additional cost.
+
+### Step 3 — Provision Infrastructure
 
 ```bash
 cd terraform/environments/dev
-cp terraform.tfvars.example terraform.tfvars  # already pre-filled except passwords
-terraform init && terraform plan
-terraform apply
 
-# Set sensitive vars via environment variables (never in tfvars):
-export TF_VAR_db_master_password="your-strong-password-here"
-export TF_VAR_jwt_secret="your-jwt-secret-here"
+export TF_VAR_db_master_password="YourSecurePassword123!"
+export TF_VAR_jwt_secret="your-32-character-jwt-signing-key-here"
+
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+# Save outputs for next steps
+terraform output app_role_arn
+terraform output alb_controller_role_arn
 ```
 
-### 4. Bootstrap the Dev Cluster
+### Step 4 — Bootstrap Cluster Add-ons
 
 ```bash
-aws eks update-kubeconfig --name travelease-dev --region ap-south-1
-./scripts/bootstrap-cluster.sh travelease-dev dev
+aws eks update-kubeconfig --name dev --region ap-south-1
+kubectl get nodes
+
+./scripts/bootstrap-cluster.sh dev dev
 ```
 
-### 5. Access the App
+The script installs in order:
+
+1. AWS Load Balancer Controller `3.5.0` — required before any Ingress can provision an ALB
+2. Metrics Server `3.14.0` — required for HPA to read CPU metrics
+3. kube-prometheus-stack `91.4.1` — Prometheus, Alertmanager, Grafana, node-exporter
+4. Loki Stack `2.10.3` — log aggregation with Promtail DaemonSet
+
+### Step 5 — Trigger Automated Deployment via GitHub Actions
 
 ```bash
-# Get the ALB URL
+git add .
+git commit -m "feat: initial deployment configuration"
+git push origin main
+```
+
+The pipeline builds the JAR, builds and scans the Docker image, pushes to ECR tagged with the git SHA, deploys to dev, runs smoke tests, deploys to test, runs smoke tests, waits for reviewer approval, and deploys to production.
+
+---
+
+## GitHub Actions Setup
+
+GitHub Actions uses **OIDC (OpenID Connect)** to authenticate with AWS. This means GitHub generates a short-lived token for each pipeline run, and AWS exchanges it for temporary credentials. No AWS access keys are ever stored in GitHub — this is far more secure than the traditional approach of pasting `AWS_ACCESS_KEY_ID` into repository secrets.
+
+For this to work, you need IAM roles in AWS that trust GitHub as an identity provider. Here is how to set them up:
+
+### Step A — Create the GitHub OIDC Identity Provider in AWS (one time)
+
+In the AWS Console, navigate to **IAM > Identity providers > Add provider**:
+- Provider type: **OpenID Connect**
+- Provider URL: `https://token.actions.githubusercontent.com`
+- Audience: `sts.amazonaws.com`
+
+### Step B — Create the Required IAM Roles
+
+Create one IAM role for ECR push and one deploy role per environment (dev, test, prod). Each role needs a trust policy that allows GitHub Actions from your specific repository:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {
+      "Federated": "arn:aws:iam::<YOUR_ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"
+    },
+    "Action": "sts:AssumeRoleWithWebIdentity",
+    "Condition": {
+      "StringEquals": {
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+      },
+      "StringLike": {
+        "token.actions.githubusercontent.com:sub": "repo:Lakshya6373/travelease-aws-eks-cicd:*"
+      }
+    }
+  }]
+}
+```
+
+- The **ECR push role** needs: `ecr:GetAuthorizationToken`, `ecr:BatchCheckLayerAvailability`, `ecr:PutImage`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`
+- Each **deploy role** needs: `eks:DescribeCluster`, and an entry in the EKS cluster's `aws-auth` ConfigMap granting `system:masters` group
+
+### Step C — Configure Repository Variables and Secrets
+
+In your GitHub repository under **Settings > Secrets and variables > Actions**:
+
+**Variables** (not sensitive, visible in logs):
+
+| Variable | Description | How to Obtain |
+| :--- | :--- | :--- |
+| `ECR_REGISTRY` | ECR registry URL without the repository name | `terraform -chdir=terraform/environments/shared output -raw ecr_registry` |
+| `SHARED_ECR_PUSH_ROLE_ARN` | IAM role ARN for pushing images to ECR | ARN of the ECR push role you created in Step B |
+| `DEV_DEPLOY_ROLE_ARN` | IAM role ARN for deploying to the dev cluster | ARN of the dev deploy role you created in Step B |
+| `TEST_DEPLOY_ROLE_ARN` | IAM role ARN for deploying to the test cluster | ARN of the test deploy role you created in Step B |
+| `PROD_DEPLOY_ROLE_ARN` | IAM role ARN for deploying to the prod cluster | ARN of the prod deploy role you created in Step B |
+
+**Secrets** (sensitive, hidden in logs):
+
+| Secret | Description |
+| :--- | :--- |
+| `SMTP_USERNAME` | Gmail address for failure notification emails |
+| `SMTP_PASSWORD` | Gmail app password — generate at myaccount.google.com/apppasswords |
+
+### Step D — Configure GitHub Environment Protection
+
+In **Settings > Environments**, create three environments named `dev`, `test`, and `production`. On the `production` environment, click **Add required reviewer** and add yourself or your team lead. This creates the manual approval gate — the pipeline will pause and send a notification before deploying to production.
+
+---
+
+## Verification and Runbook
+
+### Verify Ingress and ALB Endpoint
+
+```bash
 kubectl get ingress -n travelease
 
-# Port-forward Grafana
+ALB_URL=$(kubectl get ingress travelease -n travelease \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+./scripts/smoke-test.sh "http://${ALB_URL}"
+```
+
+### Verify IRSA and Secret Resolution
+
+```bash
+kubectl get sa travelease-app -n travelease -o yaml
+
+kubectl logs -n travelease deployment/travelease | grep -i "SecretsEnvironmentPostProcessor"
+
+kubectl describe pod -n travelease -l app.kubernetes.io/name=travelease
+```
+
+### Access Grafana Dashboards
+
+```bash
 kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80
-# Open http://localhost:3000, user: admin
+
+kubectl get secret -n monitoring kube-prometheus-stack-grafana \
+  -o jsonpath="{.data.admin-password}" | base64 --decode
+echo
+
+# Open http://localhost:3000 — username: admin
 ```
 
-### 6. Local Development
+### Verify HPA is Functioning
 
 ```bash
-cd app
-docker-compose up --build
-# Open http://localhost:8080
-# RECOMMENDATION_ENABLED=false by default — no AWS creds needed for local dev
-```
-
-### 7. CI/CD Pipeline
-
-Push to `main` → CD pipeline automatically:
-- Builds + scans with Trivy
-- Deploys to dev → smoke tests → deploys to test → smoke tests
-- **Pauses for manual approval** (GitHub Environments "required reviewers")
-- On approval → deploys to prod → smoke tests
-
----
-
-## GitHub Repository Settings (one-time manual)
-
-```
-Settings → Environments:
-  dev          (no protection rules)
-  test         (no protection rules)
-  production   (Required reviewers: add yourself)
-
-Repo-level secrets:
-  SMTP_USERNAME   — for failure email notifications
-  SMTP_PASSWORD
-
-Repo-level variables:
-  AWS_REGION           = ap-south-1
-  ECR_REGISTRY         = <account-id>.dkr.ecr.ap-south-1.amazonaws.com
-  SHARED_ECR_PUSH_ROLE_ARN
-
-Environment variables (per-environment):
-  DEV_DEPLOY_ROLE_ARN
-  TEST_DEPLOY_ROLE_ARN
-  PROD_DEPLOY_ROLE_ARN
+kubectl get hpa -n travelease
+kubectl describe hpa travelease -n travelease
 ```
 
 ---
 
-## Security Considerations
+## Security Architecture
 
-| Control | Implementation |
-|---------|---------------|
-| **No static AWS keys** | GitHub OIDC → `sts:AssumeRoleWithWebIdentity` for all CI jobs |
-| **IRSA least-privilege** | 3 separate roles: ALB controller, ESO, Bedrock — each scoped to minimum actions/resources |
-| **Secrets management** | AWS Secrets Manager → External Secrets Operator → K8s Secret; pods never see plaintext in env files |
-| **Private subnets** | EKS nodes and RDS are in private subnets; only ALB is in public subnets |
-| **Security group least-privilege** | RDS accepts connections from node SG only; nodes accept from ALB SG on app port only |
-| **WAF** | 3 managed rule groups + rate-limiting on test and prod; disabled on dev to save cost |
-| **Shield Standard** | Automatic on all ALBs (no additional config needed) |
-| **Non-root containers** | `runAsNonRoot: true`, `runAsUser: 1000` in Deployment securityContext |
-| **Image scanning** | ECR scan-on-push + Trivy in CI (blocks push on HIGH/CRITICAL CVEs) |
-| **Dependency scanning** | OWASP Dependency-Check on every PR (fails on CVSS ≥ 7) |
+The project is built on a zero-trust security model with no static credentials at any layer.
+
+```mermaid
+flowchart LR
+    subgraph Identity["Identity Layer No Static Keys"]
+        OIDC["GitHub OIDC Token
+Short-lived commit-scoped"]
+        IRSA["IRSA Projected ServiceAccount Token
+Rotated automatically by Kubernetes"]
+        STS["AWS STS AssumeRoleWithWebIdentity
+Returns 1-hour temporary credentials"]
+        OIDC -->|CD pipeline assumes deploy role| STS
+        IRSA -->|Pod assumes app-irsa role| STS
+    end
+
+    subgraph SecretsL["Secrets Layer Never in etcd or git"]
+        SM["AWS Secrets Manager
+KMS encrypted at rest
+travelease/env/app-secrets"]
+        PostProc["SecretsEnvironmentPostProcessor
+In JVM memory only
+Runs before Spring context starts"]
+        STS -->|Temporary credentials| SM
+        SM -->|JSON payload| PostProc
+    end
+
+    subgraph Network["Network Layer Private by Default"]
+        Private["EKS nodes and RDS in private subnets
+No public IPs on any workload"]
+        WAF["AWS WAF v2
+AWSManagedRulesCommonRuleSet
+Rate limiting 2000 req per 5 min"]
+    end
+
+    subgraph Supply["Supply Chain Layer"]
+        OWASP["OWASP Dependency-Check
+Blocks on CVSS >= 7"]
+        Trivy["Trivy Container Scan
+Blocks on HIGH or CRITICAL CVEs"]
+        Distroless["Distroless Final Image
+No shell no package manager"]
+    end
+```
+
+| Security Layer | Control | Objective |
+| :--- | :--- | :--- |
+| CI/CD identity | GitHub OIDC plus AWS STS federation | Eliminates long-lived AWS access keys in pipelines |
+| Pod identity | Combined IRSA role per environment | Least-privilege; app only accesses its own secret and APAC Bedrock model |
+| Secrets storage | AWS Secrets Manager with KMS encryption | Secrets never touch git, ConfigMaps, or Kubernetes etcd |
+| Network isolation | Private subnets, security groups | EKS nodes and RDS have no public IPs |
+| Edge protection | AWS WAF v2 AWSManagedRules | OWASP Top 10 protection and volumetric rate limiting |
+| Container hardening | Non-root user, privilege drop, distroless | No shell access; minimal attack surface |
+| Supply chain | OWASP and Trivy scanning in CI | Blocks known CVEs before they reach any cluster |
 
 ---
 
-## Cost Optimization
+## Cost Design Decisions
 
-| Decision | Saving |
-|----------|--------|
-| 1 NAT gateway per VPC (not 1 per AZ) | ~$65/month if left running vs $195 |
-| `t3.small/medium` nodes, HPA scale-to-min | Scales down when idle |
-| S3 native locking (`use_lockfile=true`) | No DynamoDB table needed (~$1/month savings at this scale) |
-| WAF disabled on dev | ~$9/month savings per dev env |
-| ECR lifecycle policy | Avoids storage cost from stale images |
-| 3-day Prometheus retention | Minimal EBS cost on monitoring PVC |
-| **Apply → destroy same day** | Total spend < $5 for a full build+demo cycle |
+The infrastructure demonstrates full production patterns while keeping costs below approximately $5 per complete deployment cycle for demo and interview purposes.
+
+| Decision | Default Approach | This Project | Rationale |
+| :--- | :--- | :--- | :--- |
+| NAT Gateways | One per AZ at ~$32 per month each | One per environment | Single-AZ NAT is acceptable for dev and test |
+| Terraform state locking | DynamoDB table plus S3 | S3 native conditional writes `use_lockfile = true` | Eliminates a separate DynamoDB resource |
+| WAF | Enabled in all environments | Disabled in dev | WAF costs approximately $9 per month; not needed for developer testing |
+| Pod replicas | Static over-provisioned | HPA scales to 1 replica when idle | Reduces compute cost significantly outside business hours |
+| Prometheus storage | Long-term EBS retention | 3-day TSDB retention | Sufficient for demo; avoids growing EBS volume costs |
+| RDS instance size | `db.t3.small` everywhere | `db.t3.micro` for dev and test | Micro is sufficient for non-production workloads |
+
+---
+
+## Troubleshooting
+
+### Pods are in CrashLoopBackOff with database connection errors
+
+Symptom: The pod restarts continuously with `PSQLException: Connection refused` or `Connection timed out`.
 
 ```bash
-# Same-day teardown
-./scripts/destroy-all.sh
+kubectl logs -n travelease deployment/travelease | \
+  grep -E "SecretsEnvironmentPostProcessor|PSQLException|datasource"
+
+kubectl describe sa travelease-app -n travelease
+
+aws iam get-role --role-name dev-app-irsa --query Role.AssumeRolePolicyDocument
+
+aws secretsmanager get-secret-value \
+  --secret-id travelease/dev/app-secrets \
+  --region ap-south-1
 ```
+
+Confirm that `terraform/modules/irsa-app/main.tf` references namespace `travelease` and service account `travelease-app`.
+
+---
+
+### Bedrock returns AccessDeniedException
+
+Symptom: AI recommendation calls return HTTP 500 with `AccessDeniedException` in pod logs.
+
+Cause: APAC cross-region inference profiles require permissions on both the inference profile ARN and the underlying foundation model ARN. A policy granting only one will fail.
+
+Verify that `terraform/modules/irsa-app/main.tf` includes both:
+
+```
+arn:aws:bedrock:ap-south-1:*:inference-profile/apac.amazon.nova-micro-v1:0
+arn:aws:bedrock:*::foundation-model/amazon.nova-micro-v1:0
+```
+
+---
+
+### Ingress has no ADDRESS after several minutes
+
+Symptom: `kubectl get ingress -n travelease` shows an empty `ADDRESS` field.
+
+```bash
+kubectl logs -n kube-system deployment/aws-load-balancer-controller | tail -50
+```
+
+The ALB Controller discovers subnets using Kubernetes resource tags. Verify the public subnets carry:
+
+```
+kubernetes.io/cluster/<cluster-name>  =  shared
+kubernetes.io/role/elb               =  1
+```
+
+These tags are applied automatically by `terraform/modules/vpc`. Re-run `terraform apply` in the affected environment if they are missing.
+
+---
+
+### Helm deploy fails with no matches for kind ServiceMonitor
+
+Symptom: `helm upgrade` fails with `resource mapping not found for kind "ServiceMonitor"`.
+
+Cause: The Prometheus Operator CRDs are not installed on the cluster.
+
+```bash
+./scripts/bootstrap-cluster.sh <cluster-name> <env>
+```
+
+If Prometheus is intentionally not installed, set `serviceMonitor.enabled: false` in the environment values file.
 
 ---
 
 ## Teardown
 
+To destroy all AWS resources and stop all billing:
+
 ```bash
+# Destroy dev environment only with confirmation prompt
 ./scripts/destroy-all.sh
-# Destroys: prod → test → dev → shared → bootstrap (optional)
-# Leaves ECR and state bucket intact by default (cents/month)
+
+# Destroy all environments: prod then test then dev then shared
+./scripts/destroy-all.sh --all
+
+# Optionally remove the Terraform state bucket
+cd terraform/bootstrap
+terraform destroy -auto-approve
+```
+
+The destroy script deletes Helm releases and Ingress resources first so the ALB Controller removes the AWS Load Balancer cleanly before VPC teardown, then cleans up orphaned VPC network interfaces to prevent subnet deletion failures.
+
+> Always run teardown in this order: Helm uninstall first, then Terraform destroy. If you run Terraform destroy first, the VPC deletion will hang because the AWS Load Balancer (created by Kubernetes, not Terraform) is still attached to the subnets.
+
+---
+
+## Quick Reference — Common Commands
+
+This section is a cheatsheet for the most common operations during development and debugging.
+
+### Infrastructure
+
+```bash
+# Apply infrastructure changes for a specific environment
+terraform -chdir=terraform/environments/dev apply -auto-approve
+
+# Get all outputs from an environment (role ARNs, cluster name, etc.)
+terraform -chdir=terraform/environments/dev output
+
+# Connect kubectl to a cluster
+aws eks update-kubeconfig --name dev --region ap-south-1
+```
+
+### Kubernetes — Checking App State
+
+```bash
+# See all resources in the travelease namespace
+kubectl get all -n travelease
+
+# Check pod status
+kubectl get pods -n travelease
+
+# Read live logs from the application
+kubectl logs -n travelease deployment/travelease -f
+
+# Describe a pod (shows events, resource limits, mounted volumes)
+kubectl describe pod -n travelease <pod-name>
+
+# Get the public ALB address
+kubectl get ingress -n travelease
+
+# Check autoscaler state
+kubectl get hpa -n travelease
+
+# Check resource usage per pod
+kubectl top pods -n travelease
+```
+
+### Helm — Deploying and Managing Releases
+
+```bash
+# Deploy (or upgrade) to dev manually
+helm upgrade --install travelease helm/travelease \
+  -f helm/travelease/values-dev.yaml \
+  --namespace travelease \
+  --create-namespace \
+  --set image.tag=<git-sha>
+
+# See what Helm has deployed
+helm list -n travelease
+
+# See the rendered templates without applying them (dry run)
+helm template travelease helm/travelease -f helm/travelease/values-dev.yaml
+
+# Roll back to the previous release
+helm rollback travelease -n travelease
+
+# Remove the application from the cluster
+helm uninstall travelease -n travelease
+```
+
+### Monitoring
+
+```bash
+# Open Grafana in your browser (runs on localhost:3000)
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80
+
+# Get the Grafana admin password
+kubectl get secret -n monitoring kube-prometheus-stack-grafana \
+  -o jsonpath="{.data.admin-password}" | base64 --decode && echo
+
+# Check if Prometheus is scraping the app
+kubectl get servicemonitor -n travelease
+```
+
+### Smoke Test
+
+```bash
+# Run smoke tests against a running environment
+ALB_URL=$(kubectl get ingress travelease -n travelease -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+bash scripts/smoke-test.sh "http://${ALB_URL}"
 ```

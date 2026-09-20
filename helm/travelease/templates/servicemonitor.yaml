@@ -1,11 +1,12 @@
+{{- if .Values.serviceMonitor.enabled }}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: {{ include "travelease.fullname" . }}
-  namespace: travelease
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "travelease.labels" . | nindent 4 }}
-    # This label is required for the Prometheus Operator to discover this ServiceMonitor
+    # Required for Prometheus Operator to discover this ServiceMonitor
     release: kube-prometheus-stack
 spec:
   selector:
@@ -18,4 +19,5 @@ spec:
       scrapeTimeout: 10s
   namespaceSelector:
     matchNames:
-      - travelease
+      - {{ .Release.Namespace }}
+{{- end }}

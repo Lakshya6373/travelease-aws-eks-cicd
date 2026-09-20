@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "travelease.fullname" . }}
-  namespace: travelease
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "travelease.labels" . | nindent 4 }}
 spec:

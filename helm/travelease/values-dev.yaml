@@ -9,9 +9,14 @@ image:
 env:
   SPRING_PROFILES_ACTIVE: "dev"
   RECOMMENDATION_ENABLED: "true"
+  # Env-scoped secret — Terraform outputs this value after apply
+  # Format: travelease/{env}/app-secrets
+  SECRET_NAME: "travelease/dev/app-secrets"
 
 serviceAccount:
-  bedrockRoleArn: "arn:aws:iam::892978057052:role/dev-bedrock-irsa"
+  # Combined IRSA role: Bedrock (ap-south-1) + SecretsManager read
+  # Get the exact ARN from: terraform output app_role_arn
+  bedrockRoleArn: "arn:aws:iam::892978057052:role/dev-app-irsa"
 
 ingress:
   wafAclArn: ""  # WAF disabled in dev
@@ -20,3 +25,7 @@ ingress:
 autoscaling:
   minReplicas: 1
   maxReplicas: 2
+
+# Prometheus Operator is installed by bootstrap-cluster.sh — safe to enable
+serviceMonitor:
+  enabled: true

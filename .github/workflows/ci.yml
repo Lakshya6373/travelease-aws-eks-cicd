@@ -100,7 +100,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.11.0"
+          terraform_version: "1.15.7"
 
       - name: Terraform format check
         run: terraform fmt -check -recursive terraform/
@@ -116,8 +116,7 @@ jobs:
             terraform/modules/waf \
             terraform/modules/access-logging \
             terraform/modules/irsa-alb-controller \
-            terraform/modules/irsa-external-secrets \
-            terraform/modules/irsa-bedrock \
+            terraform/modules/irsa-app \
             terraform/modules/secrets-manager; do
             echo "Validating $dir..."
             terraform -chdir="$dir" init -backend=false -input=false
@@ -140,7 +139,7 @@ jobs:
       - name: Setup Helm
         uses: azure/setup-helm@v4
         with:
-          version: "3.15.0"
+          version: "3.17.1"
 
       - name: Helm lint (dev values)
         run: helm lint helm/travelease -f helm/travelease/values-dev.yaml

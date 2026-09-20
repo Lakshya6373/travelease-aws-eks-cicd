@@ -97,16 +97,16 @@ Multi-AZ doubles the RDS cost (~$0.70/day → ~$1.40/day for db.t3.micro), and f
 
 ---
 
-## 8. Split Region Strategy: Infrastructure in ap-south-1, Bedrock in us-east-1
+## 8. Consolidated Regional Strategy: All Services and Bedrock in ap-south-1
 
-**Decision:** All infra (EKS, RDS, ALB, WAF, VPC) in `ap-south-1`; Bedrock calls to `us-east-1`.
+**Decision:** All infrastructure (EKS, RDS, ALB, WAF, VPC) and Bedrock invocations in `ap-south-1` (Mumbai).
 
 **Alternatives considered:**
-- Everything in `us-east-1` (single region, simpler)
-- Bedrock cross-region inference profile (stays in ap-south-1, routes dynamically)
+- Split region: infrastructure in `ap-south-1`, Bedrock calls routed to `us-east-1`
+- Multi-region active-active deployment
 
 **Why this one:**
-Amazon Nova Micro's direct on-demand invocation (`foundation-model/amazon.nova-micro-v1:0`) is not available in `ap-south-1`. Cross-region inference profiles use a different model ID format, require additional IAM permissions spanning multiple regions, and add complexity for no performance benefit at demo scale. The simplest solution is a dedicated `BEDROCK_REGION=us-east-1` env var pointing the `BedrockRuntimeClient` bean at a different region from everything else. The extra latency (~200ms Mumbai→Virginia round trip) only affects the AI search box, not page loads or bookings.
+Consolidating all traffic and services into `ap-south-1` keeps data residency local and eliminates cross-continent latency hops (~200ms round trips between Mumbai and N. Virginia). Amazon Nova Micro is available in `ap-south-1` via the APAC regional inference profile (`apac.amazon.nova-micro-v1:0`). This automatically and transparently routes invocations across low-latency Asia Pacific regions (Mumbai, Tokyo, Sydney, Seoul) while keeping the caller entirely within `ap-south-1`.
 
 ---
 
@@ -121,3 +121,17 @@ Amazon Nova Micro's direct on-demand invocation (`foundation-model/amazon.nova-m
 
 **Why this one:**
 ALB is a managed AWS service — it cannot push directly to Loki. The AWS-native path is S3 delivery (enabled via a single Ingress annotation). Rather than adding a log-forwarding sidecar, we use Grafana's official Athena datasource plugin to query the S3 bucket directly through a Glue catalog table. This keeps one Grafana dashboard as the single pane of glass for application logs (Loki), node/system logs (Loki via journal scrape), and HTTP access logs (Athena) — which is the correct answer to "centralized logging" even when the storage backends differ.
+
+---
+
+## 10. Direct Pod IRSA Secrets Fetching vs. External Secrets Operator (ESO)
+
+**Decision:** The application pod uses its own IAM Role for Service Accounts (IRSA) to fetch credentials directly from AWS Secrets Manager at startup via `SecretsEnvironmentPostProcessor`.
+
+**Alternatives considered:**
+- External Secrets Operator (ESO) syncing AWS Secrets Manager to Kubernetes `Secret` objects
+- CSI Secrets Store Driver
+- Hardcoding or passing secrets via CI/CD environment variables
+
+**Why this one:**
+Running the External Secrets Operator requires maintaining extra custom resource definitions (`ClusterSecretStore`, `ExternalSecret`), a dedicated controller deployment, its own IRSA role, and a continuous synchronization loop. Since the application pod already requires an IRSA identity for Amazon Bedrock AI, extending that role to read its environment-scoped secret (`travelease/${env}/app-secrets`) removes an entire third-party cluster operator dependency. At startup, the Spring Boot `SecretsEnvironmentPostProcessor` pulls the database credentials before `DataSourceAutoConfiguration` starts, while still gracefully falling back to local defaults for test and local development.

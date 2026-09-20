@@ -50,7 +50,7 @@ public class RecommendationService {
     @Value("${app.recommendation.enabled:true}")
     private boolean recommendationEnabled;
 
-    @Value("${aws.bedrock.model-id:amazon.nova-micro-v1:0}")
+    @Value("${aws.bedrock.model-id:apac.amazon.nova-micro-v1:0}")
     private String modelId;
 
     public RecommendationService(BedrockRuntimeClient bedrockClient,

@@ -58,7 +58,7 @@ resource "aws_s3_bucket_policy" "enforce_tls" {
       Effect    = "Deny"
       Principal = "*"
       Action    = "s3:*"
-      Resource  = [
+      Resource = [
         aws_s3_bucket.state.arn,
         "${aws_s3_bucket.state.arn}/*"
       ]

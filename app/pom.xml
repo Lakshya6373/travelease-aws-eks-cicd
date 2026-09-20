@@ -95,6 +95,12 @@
             <artifactId>bedrockruntime</artifactId>
             <version>${aws.sdk.version}</version>
         </dependency>
+        <!-- AWS SDK v2 — Secrets Manager: direct secret fetch at startup via IRSA -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>secretsmanager</artifactId>
+            <version>${aws.sdk.version}</version>
+        </dependency>
         <!-- Use Java's built-in HTTP client — avoids Apache HttpClient5 version conflict with Spring Boot -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>

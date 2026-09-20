@@ -3,6 +3,9 @@ server:
 
 spring:
   datasource:
+    # In-cluster: DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD are populated by
+    # SecretsConfig.java which fetches travelease/{env}/app-secrets from AWS SM at startup.
+    # Locally: use defaults below (docker-compose sets real values via environment block).
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:travelease}
     username: ${DB_USER:travelease}
     password: ${DB_PASSWORD:localpassword}
@@ -52,9 +55,13 @@ app:
   recommendation:
     enabled: ${RECOMMENDATION_ENABLED:true}
 
-# AWS config — two regions intentionally
+# AWS config — all in ap-south-1 (Mumbai)
 aws:
   region: ${AWS_REGION:ap-south-1}
   bedrock:
-    region: ${BEDROCK_REGION:us-east-1}
-    model-id: ${BEDROCK_MODEL_ID:amazon.nova-micro-v1:0}
+    # APAC regional inference profile: apac. prefix routes within Asia Pacific (Mumbai, Tokyo, Sydney, Seoul, etc.)
+    region: ${BEDROCK_REGION:ap-south-1}
+    model-id: ${BEDROCK_MODEL_ID:apac.amazon.nova-micro-v1:0}
+  secrets:
+    # Secrets Manager secret name — injected by Helm via SECRET_NAME env var
+    secret-name: ${SECRET_NAME:}

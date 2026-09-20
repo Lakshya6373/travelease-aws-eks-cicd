@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "travelease.fullname" . }}
-  namespace: travelease
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "travelease.labels" . | nindent 4 }}
 spec:
@@ -44,38 +44,12 @@ spec:
             - configMapRef:
                 name: {{ include "travelease.fullname" . }}-config
 
-          # Sensitive config from Secret (populated by ExternalSecrets)
+          # The app fetches DB credentials directly from AWS Secrets Manager at
+          # startup using the SDK + IRSA. SECRET_NAME tells it which secret to read.
+          # No ESO / ExternalSecret / ClusterSecretStore needed.
           env:
-            - name: DB_HOST
-              valueFrom:
-                secretKeyRef:
-                  name: travelease-db-secret
-                  key: db_host
-            - name: DB_PORT
-              valueFrom:
-                secretKeyRef:
-                  name: travelease-db-secret
-                  key: db_port
-            - name: DB_NAME
-              valueFrom:
-                secretKeyRef:
-                  name: travelease-db-secret
-                  key: db_name
-            - name: DB_USER
-              valueFrom:
-                secretKeyRef:
-                  name: travelease-db-secret
-                  key: db_user
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: travelease-db-secret
-                  key: db_password
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: travelease-db-secret
-                  key: jwt_secret
+            - name: SECRET_NAME
+              value: {{ .Values.env.SECRET_NAME | quote }}
 
           livenessProbe:
             httpGet:

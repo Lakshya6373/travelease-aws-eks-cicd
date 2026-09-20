@@ -3,7 +3,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ include "travelease.fullname" . }}
-  namespace: travelease
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "travelease.labels" . | nindent 4 }}
   annotations:

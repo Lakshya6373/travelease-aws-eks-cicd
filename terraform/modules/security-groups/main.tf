@@ -38,11 +38,11 @@ resource "aws_security_group" "node" {
 
   # Allow traffic from the ALB on the app port
   ingress {
-    description              = "From ALB on app port"
-    from_port                = var.app_port
-    to_port                  = var.app_port
-    protocol                 = "tcp"
-    security_groups          = [aws_security_group.alb.id]
+    description     = "From ALB on app port"
+    from_port       = var.app_port
+    to_port         = var.app_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
   }
 
   # Allow all traffic within the node SG (pod-to-pod communication)
@@ -72,11 +72,11 @@ resource "aws_security_group" "rds" {
   vpc_id      = var.vpc_id
 
   ingress {
-    description              = "PostgreSQL from EKS nodes"
-    from_port                = 5432
-    to_port                  = 5432
-    protocol                 = "tcp"
-    security_groups          = [aws_security_group.node.id]
+    description     = "PostgreSQL from EKS nodes"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.node.id]
   }
 
   # No egress needed for RDS

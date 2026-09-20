@@ -27,14 +27,16 @@ locals {
 }
 
 module "vpc" {
-  source                = "../../modules/vpc"
-  environment_name      = local.env
-  cluster_name          = "travelease-${local.env}"
-  vpc_cidr              = var.vpc_cidr
-  public_subnet_cidrs   = var.public_subnet_cidrs
-  private_subnet_cidrs  = var.private_subnet_cidrs
-  availability_zones    = var.availability_zones
-  tags                  = local.tags
+  source           = "../../modules/vpc"
+  environment_name = local.env
+  # Cluster name kept with project prefix for subnet auto-discovery tags
+  # The EKS cluster itself is named just "dev" (set in module.eks below)
+  cluster_name         = local.env
+  vpc_cidr             = var.vpc_cidr
+  public_subnet_cidrs  = var.public_subnet_cidrs
+  private_subnet_cidrs = var.private_subnet_cidrs
+  availability_zones   = var.availability_zones
+  tags                 = local.tags
 }
 
 module "security_groups" {
@@ -44,15 +46,16 @@ module "security_groups" {
 }
 
 module "eks" {
-  source                  = "../../modules/eks"
-  cluster_name            = "travelease-${local.env}"
-  vpc_id                  = module.vpc.vpc_id
-  private_subnet_ids      = module.vpc.private_subnet_ids
-  node_instance_types     = var.node_instance_types
-  node_min_size           = var.node_min_size
-  node_max_size           = var.node_max_size
-  node_desired_size       = var.node_desired_size
-  environment_name        = local.env
+  source = "../../modules/eks"
+  # Generic environment-based name: "dev", "test", "prod"
+  cluster_name        = local.env
+  vpc_id              = module.vpc.vpc_id
+  private_subnet_ids  = module.vpc.private_subnet_ids
+  node_instance_types = var.node_instance_types
+  node_min_size       = var.node_min_size
+  node_max_size       = var.node_max_size
+  node_desired_size   = var.node_desired_size
+  environment_name    = local.env
 }
 
 module "rds" {
@@ -79,6 +82,10 @@ module "access_logging" {
   region           = var.region
 }
 
+# ── Secrets Manager ───────────────────────────────────────────────────────────
+# Creates env-scoped secret: travelease/{env}/app-secrets
+# The app pod fetches this directly at startup via IRSA — no ESO operator needed.
+
 module "secrets_manager" {
   source           = "../../modules/secrets-manager"
   environment_name = local.env
@@ -91,24 +98,23 @@ module "secrets_manager" {
 }
 
 module "irsa_alb_controller" {
-  source             = "../../modules/irsa-alb-controller"
-  oidc_provider_arn  = module.eks.oidc_provider_arn
-  oidc_provider_url  = module.eks.oidc_provider_url
-  environment_name   = local.env
+  source            = "../../modules/irsa-alb-controller"
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  oidc_provider_url = module.eks.oidc_provider_url
+  environment_name  = local.env
 }
 
-module "irsa_external_secrets" {
-  source             = "../../modules/irsa-external-secrets"
-  oidc_provider_arn  = module.eks.oidc_provider_arn
-  oidc_provider_url  = module.eks.oidc_provider_url
-  secret_arn         = module.secrets_manager.secret_arn
-  environment_name   = local.env
-}
+# ── App IRSA ──────────────────────────────────────────────────────────────────
+# Single role for the travelease-app service account covering:
+#   • bedrock:InvokeModel  (ap-south-1 cross-region inference profile)
+#   • secretsmanager:GetSecretValue / DescribeSecret  (this env's secret only)
+# Replaces the old irsa-bedrock + irsa-external-secrets modules.
 
-module "irsa_bedrock" {
-  source             = "../../modules/irsa-bedrock"
-  oidc_provider_arn  = module.eks.oidc_provider_arn
-  oidc_provider_url  = module.eks.oidc_provider_url
-  bedrock_region     = "us-east-1"
-  environment_name   = local.env
+module "irsa_app" {
+  source            = "../../modules/irsa-app"
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  oidc_provider_url = module.eks.oidc_provider_url
+  environment_name  = local.env
+  secret_arn        = module.secrets_manager.secret_arn
+  bedrock_region    = var.region # ap-south-1
 }

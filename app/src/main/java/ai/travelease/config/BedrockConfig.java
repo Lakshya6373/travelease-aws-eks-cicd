@@ -10,9 +10,9 @@ import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 /**
  * Configures the AWS Bedrock Runtime client.
  *
- * NOTE: The Bedrock region is intentionally read from BEDROCK_REGION (default us-east-1),
- * NOT from the general AWS_REGION (ap-south-1). Amazon Nova Micro direct on-demand
- * invocation is only available in us-east-1; all other infrastructure stays in ap-south-1.
+ * Region: ap-south-1 (Mumbai). Amazon Nova Micro is available in ap-south-1
+ * via cross-region inference profiles (model ID prefix: "ap.").
+ * All infrastructure and Bedrock calls stay in the same region — no cross-continent hops.
  *
  * Credentials come from the default AWS SDK credential chain:
  *   - Locally: ~/.aws/credentials or environment variables (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)
@@ -24,7 +24,7 @@ import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 @Configuration
 public class BedrockConfig {
 
-    @Value("${aws.bedrock.region:us-east-1}")
+    @Value("${aws.bedrock.region:ap-south-1}")
     private String bedrockRegion;
 
     @Bean

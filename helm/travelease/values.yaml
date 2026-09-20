@@ -9,7 +9,8 @@ image:
 serviceAccount:
   create: true
   name: "travelease-app"
-  # IRSA annotation — set per environment in values-{env}.yaml
+  # Combined IRSA role ARN (Bedrock ap-south-1 + Secrets Manager) — set per env
+  roleArn: ""
   bedrockRoleArn: ""
 
 service:
@@ -25,10 +26,14 @@ ingress:
 
 env:
   AWS_REGION: "ap-south-1"
-  BEDROCK_REGION: "us-east-1"
-  BEDROCK_MODEL_ID: "amazon.nova-micro-v1:0"
+  BEDROCK_REGION: "ap-south-1"
+  # APAC regional inference profile prefix: "apac." routes requests within Asia Pacific
+  BEDROCK_MODEL_ID: "apac.amazon.nova-micro-v1:0"
   RECOMMENDATION_ENABLED: "true"
   SPRING_PROFILES_ACTIVE: "prod"
+  # AWS Secrets Manager secret name — set per environment in values-{env}.yaml
+  # App fetches this secret at startup via IRSA (no ESO operator needed)
+  SECRET_NAME: ""
 
 resources:
   requests:
@@ -59,3 +64,30 @@ readinessProbe:
   initialDelaySeconds: 30
   periodSeconds: 10
   failureThreshold: 3
+
+# Namespace governance — ResourceQuota and LimitRange
+quota:
+  enabled: true
+  requests:
+    cpu: "4"
+    memory: "4Gi"
+  limits:
+    cpu: "8"
+    memory: "8Gi"
+  pods: "20"
+
+limitRange:
+  enabled: true
+  default:
+    cpu: "500m"
+    memory: "512Mi"
+  defaultRequest:
+    cpu: "100m"
+    memory: "256Mi"
+  max:
+    cpu: "2"
+    memory: "2Gi"
+
+# Prometheus ServiceMonitor — only enable after kube-prometheus-stack is installed
+serviceMonitor:
+  enabled: false

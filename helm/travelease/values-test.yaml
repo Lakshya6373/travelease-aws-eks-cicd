@@ -4,9 +4,11 @@ replicaCount: 1
 env:
   SPRING_PROFILES_ACTIVE: "test"
   RECOMMENDATION_ENABLED: "true"
+  SECRET_NAME: "travelease/test/app-secrets"
 
 serviceAccount:
-  bedrockRoleArn: ""  # Replace with: terraform output -raw bedrock_role_arn (from test env)
+  roleArn: ""         # Replace with: terraform output -raw app_role_arn (from test env)
+  bedrockRoleArn: ""
 
 ingress:
   wafAclArn: ""      # Replace with: terraform output -raw waf_acl_arn (from test env)
@@ -15,3 +17,7 @@ ingress:
 autoscaling:
   minReplicas: 1
   maxReplicas: 3
+
+# Prometheus Operator is installed by bootstrap-cluster.sh — safe to enable
+serviceMonitor:
+  enabled: true

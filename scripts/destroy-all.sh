@@ -44,7 +44,6 @@ fi
 helm uninstall travelease -n travelease 2>/dev/null || true
 helm uninstall kube-prometheus-stack -n monitoring 2>/dev/null || true
 helm uninstall loki-stack -n monitoring 2>/dev/null || true
-helm uninstall external-secrets -n external-secrets 2>/dev/null || true
 helm uninstall metrics-server -n kube-system 2>/dev/null || true
 helm uninstall aws-load-balancer-controller -n kube-system 2>/dev/null || true
 

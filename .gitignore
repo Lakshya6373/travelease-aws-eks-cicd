@@ -40,3 +40,6 @@ app/dependency-check-report.html
 
 # Node (if any tooling added later)
 node_modules/
+
+# Local-only documentation (not for git)
+CHALLENGES.md

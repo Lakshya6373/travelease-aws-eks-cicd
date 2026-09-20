@@ -58,8 +58,8 @@ resource "aws_glue_catalog_table" "alb_logs" {
   table_type = "EXTERNAL_TABLE"
 
   parameters = {
-    "serialization.format" = "1"
-    "EXTERNAL"             = "TRUE"
+    "serialization.format"   = "1"
+    "EXTERNAL"               = "TRUE"
     "skip.header.line.count" = "0"
   }
 

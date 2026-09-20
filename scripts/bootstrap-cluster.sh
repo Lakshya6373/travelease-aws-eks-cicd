@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # bootstrap-cluster.sh
-# Installs the 5 cluster-level Helm releases in the correct order, then applies platform manifests.
+# Installs the 4 cluster-level Helm releases in the correct order, then applies platform manifests.
 # Usage: ./scripts/bootstrap-cluster.sh <cluster-name> <env> [kubeconfig-context]
 #
-# Example: ./scripts/bootstrap-cluster.sh travelease-dev dev
+# Example: ./scripts/bootstrap-cluster.sh dev dev
 #
 # Prerequisites:
 #   - kubectl configured for the target cluster (aws eks update-kubeconfig --name <cluster>)
@@ -22,7 +22,6 @@ TF_DIR="terraform/environments/${ENV}"
 echo "==> Reading Terraform outputs from $TF_DIR..."
 
 ALB_ROLE_ARN=$(terraform -chdir="$TF_DIR" output -raw alb_controller_role_arn | tr -d '\r')
-ESO_ROLE_ARN=$(terraform -chdir="$TF_DIR" output -raw eso_role_arn | tr -d '\r')
 VPC_ID=$(terraform -chdir="$TF_DIR" output -raw vpc_id 2>/dev/null | tr -d '\r' || echo "")
 GRAFANA_PASSWORD=$(aws secretsmanager get-secret-value \
   --secret-id "travelease/${ENV}/grafana-admin" \
@@ -38,12 +37,12 @@ helm repo add eks           https://aws.github.io/eks-charts
 helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo add grafana        https://grafana.github.io/helm-charts
-helm repo add external-secrets https://charts.external-secrets.io
 helm repo update
 
 # ── 1. AWS Load Balancer Controller ─────────────────────────────────────────
-echo "==> [1/5] Installing AWS Load Balancer Controller..."
+echo "==> [1/4] Installing AWS Load Balancer Controller (v3.5.0)..."
 helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+  --version "3.5.0" \
   --namespace kube-system \
   --create-namespace \
   --set clusterName="${CLUSTER_NAME}" \
@@ -64,14 +63,16 @@ kubectl patch validatingwebhookconfiguration aws-load-balancer-webhook --type=js
   -p='[{"op":"replace","path":"/webhooks/0/failurePolicy","value":"Ignore"},{"op":"replace","path":"/webhooks/1/failurePolicy","value":"Ignore"}]' 2>/dev/null || true
 
 # ── 2. Metrics Server ────────────────────────────────────────────────────────
-echo "==> [2/5] Installing Metrics Server..."
+echo "==> [2/4] Installing Metrics Server (v3.14.0)..."
 helm upgrade --install metrics-server metrics-server/metrics-server \
+  --version "3.14.0" \
   --namespace kube-system \
   --wait
 
 # ── 3. kube-prometheus-stack (Prometheus + Grafana + Alertmanager) ───────────
-echo "==> [3/5] Installing kube-prometheus-stack..."
+echo "==> [3/4] Installing kube-prometheus-stack (v91.4.1)..."
 helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  --version "91.4.1" \
   --namespace monitoring \
   --create-namespace \
   -f platform/grafana-values-common.yaml \
@@ -80,44 +81,14 @@ helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheu
   --set prometheusOperator.tls.enabled=false
 
 # ── 4. Loki Stack (Loki + Promtail) ─────────────────────────────────────────
-echo "==> [4/5] Installing Loki Stack..."
+echo "==> [4/4] Installing Loki Stack (v2.10.3)..."
 helm upgrade --install loki-stack grafana/loki-stack \
+  --version "2.10.3" \
   --namespace monitoring \
   --set promtail.enabled=true \
   --set loki.persistence.enabled=false \
   --set loki.isDefault=false \
   -f platform/grafana-values-common.yaml
-
-# ── 5. External Secrets Operator ─────────────────────────────────────────────
-echo "==> [5/5] Installing External Secrets Operator..."
-helm upgrade --install external-secrets external-secrets/external-secrets \
-  --namespace external-secrets \
-  --create-namespace \
-  --set installCRDs=true \
-  --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"="${ESO_ROLE_ARN}" \
-  --wait
-
-# ── Apply platform manifests ─────────────────────────────────────────────────
-echo "==> Applying platform manifests..."
-kubectl apply -f platform/namespace.yaml
-
-# Create annotated service account for External Secrets in travelease namespace
-echo "==> Configuring External Secrets service account in travelease namespace..."
-kubectl create serviceaccount external-secrets -n travelease --dry-run=client -o yaml | \
-  kubectl annotate --local -f - "eks.amazonaws.com/role-arn=${ESO_ROLE_ARN}" --overwrite -o yaml | \
-  kubectl apply -f -
-
-# Wait for CRD and ESO deployment to be established
-echo "==> Waiting for External Secrets CRD and deployment to be ready..."
-kubectl wait --for=condition=Established crd/clustersecretstores.external-secrets.io --timeout=60s
-kubectl wait deployment/external-secrets \
-  -n external-secrets \
-  --for=condition=Available \
-  --timeout=120s
-
-# Invalidate client discovery cache so kubectl recognizes newly registered CRDs
-rm -rf ~/.kube/cache/discovery/* 2>/dev/null || true
-kubectl apply -f platform/cluster-secret-store.yaml
 
 echo ""
 echo "✅ Cluster bootstrap complete for ${CLUSTER_NAME}!"
