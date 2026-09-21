@@ -117,7 +117,8 @@ jobs:
             terraform/modules/access-logging \
             terraform/modules/irsa-alb-controller \
             terraform/modules/irsa-app \
-            terraform/modules/secrets-manager; do
+            terraform/modules/secrets-manager \
+            terraform/modules/github-oidc; do
             echo "Validating $dir..."
             terraform -chdir="$dir" init -backend=false -input=false
             terraform -chdir="$dir" validate

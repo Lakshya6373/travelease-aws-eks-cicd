@@ -661,44 +661,50 @@ The pipeline builds the JAR, builds and scans the Docker image, pushes to ECR ta
 
 ## GitHub Actions Setup
 
-GitHub Actions uses **OIDC (OpenID Connect)** to authenticate with AWS. This means GitHub generates a short-lived token for each pipeline run, and AWS exchanges it for temporary credentials. No AWS access keys are ever stored in GitHub — this is far more secure than the traditional approach of pasting `AWS_ACCESS_KEY_ID` into repository secrets.
+GitHub Actions uses **OIDC (OpenID Connect)** to authenticate with AWS. This means GitHub generates a short-lived token for each pipeline run, and AWS exchanges it for temporary credentials. No AWS access keys are ever stored in GitHub.
 
-For this to work, you need IAM roles in AWS that trust GitHub as an identity provider. Here is how to set them up:
+The GitHub OIDC Identity Provider and all four IAM roles are created by Terraform in the shared environment. There is nothing to create manually in the AWS console.
 
-### Step A — Create the GitHub OIDC Identity Provider in AWS (one time)
+### Step A — Apply the Shared Environment (creates OIDC roles)
 
-In the AWS Console, navigate to **IAM > Identity providers > Add provider**:
-- Provider type: **OpenID Connect**
-- Provider URL: `https://token.actions.githubusercontent.com`
-- Audience: `sts.amazonaws.com`
+```bash
+cd terraform/environments/shared
+terraform init
+terraform apply -auto-approve
 
-### Step B — Create the Required IAM Roles
-
-Create one IAM role for ECR push and one deploy role per environment (dev, test, prod). Each role needs a trust policy that allows GitHub Actions from your specific repository:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Principal": {
-      "Federated": "arn:aws:iam::<YOUR_ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"
-    },
-    "Action": "sts:AssumeRoleWithWebIdentity",
-    "Condition": {
-      "StringEquals": {
-        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
-      },
-      "StringLike": {
-        "token.actions.githubusercontent.com:sub": "repo:Lakshya6373/travelease-aws-eks-cicd:*"
-      }
-    }
-  }]
-}
+# After apply completes, print the role ARNs to copy into GitHub
+terraform output
 ```
 
-- The **ECR push role** needs: `ecr:GetAuthorizationToken`, `ecr:BatchCheckLayerAvailability`, `ecr:PutImage`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`
-- Each **deploy role** needs: `eks:DescribeCluster`, and an entry in the EKS cluster's `aws-auth` ConfigMap granting `system:masters` group
+You will see output like this:
+
+```
+github_ecr_push_role_arn    = "arn:aws:iam::892978057052:role/travelease-github-ecr-push"
+github_dev_deploy_role_arn  = "arn:aws:iam::892978057052:role/travelease-github-dev-deploy"
+github_test_deploy_role_arn = "arn:aws:iam::892978057052:role/travelease-github-test-deploy"
+github_prod_deploy_role_arn = "arn:aws:iam::892978057052:role/travelease-github-prod-deploy"
+ecr_repository_url          = "892978057052.dkr.ecr.ap-south-1.amazonaws.com/travelease"
+```
+
+### Step B — Add RBAC Access for Deploy Roles Inside Each EKS Cluster
+
+Each deploy role needs permission to run `helm upgrade` inside the cluster. After bootstrapping each EKS cluster, run:
+
+```bash
+# Repeat for each cluster: dev, test, prod
+aws eks update-kubeconfig --name dev --region ap-south-1
+
+kubectl edit configmap aws-auth -n kube-system
+```
+
+Add an entry under `mapRoles` for the deploy role:
+
+```yaml
+- rolearn: arn:aws:iam::892978057052:role/travelease-github-dev-deploy
+  username: github-actions
+  groups:
+    - system:masters
+```
 
 ### Step C — Configure Repository Variables and Secrets
 
@@ -706,13 +712,13 @@ In your GitHub repository under **Settings > Secrets and variables > Actions**:
 
 **Variables** (not sensitive, visible in logs):
 
-| Variable | Description | How to Obtain |
-| :--- | :--- | :--- |
-| `ECR_REGISTRY` | ECR registry URL without the repository name | `terraform -chdir=terraform/environments/shared output -raw ecr_registry` |
-| `SHARED_ECR_PUSH_ROLE_ARN` | IAM role ARN for pushing images to ECR | ARN of the ECR push role you created in Step B |
-| `DEV_DEPLOY_ROLE_ARN` | IAM role ARN for deploying to the dev cluster | ARN of the dev deploy role you created in Step B |
-| `TEST_DEPLOY_ROLE_ARN` | IAM role ARN for deploying to the test cluster | ARN of the test deploy role you created in Step B |
-| `PROD_DEPLOY_ROLE_ARN` | IAM role ARN for deploying to the prod cluster | ARN of the prod deploy role you created in Step B |
+| Variable | Value (copy from terraform output) |
+| :--- | :--- |
+| `ECR_REGISTRY` | `892978057052.dkr.ecr.ap-south-1.amazonaws.com` (registry URL without repo name) |
+| `SHARED_ECR_PUSH_ROLE_ARN` | Value of `github_ecr_push_role_arn` output |
+| `DEV_DEPLOY_ROLE_ARN` | Value of `github_dev_deploy_role_arn` output |
+| `TEST_DEPLOY_ROLE_ARN` | Value of `github_test_deploy_role_arn` output |
+| `PROD_DEPLOY_ROLE_ARN` | Value of `github_prod_deploy_role_arn` output |
 
 **Secrets** (sensitive, hidden in logs):
 
