@@ -51,7 +51,9 @@ data "aws_iam_policy_document" "github_assume_role" {
       variable = "token.actions.githubusercontent.com:sub"
       values   = [
         "repo:${var.github_repo}:*",
-        "repo:${lower(var.github_repo)}:*"
+        "repo:${lower(var.github_repo)}:*",
+        "repo:Lakshya6373*/travelease-aws-eks-cicd*:*",
+        "repo:lakshya6373*/travelease-aws-eks-cicd*:*"
       ]
     }
 
