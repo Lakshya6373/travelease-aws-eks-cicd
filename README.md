@@ -607,12 +607,9 @@ terraform init && terraform apply -auto-approve
 terraform output ecr_repository_url
 ```
 
-### Step 2 — Enable Bedrock Model Access
+### Step 2 — Bedrock Model Access (Automatic)
 
-1. Open the AWS Management Console and set your region to **ap-south-1** (Mumbai).
-2. Navigate to **Amazon Bedrock** then **Model access** in the left sidebar.
-3. Select **Manage model access** and enable **Amazon Nova Micro**.
-4. Save changes. Access is granted immediately at no additional cost.
+Amazon Bedrock now automatically enables serverless foundation models (including Amazon Nova Micro) across commercial regions upon first invocation in your account. No manual activation in the AWS Console is required. IAM access control is managed entirely via the `irsa-app` Terraform module.
 
 ### Step 3 — Provision Infrastructure
 

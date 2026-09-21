@@ -33,15 +33,19 @@ echo ""
 echo "==> [Step 1/3] Deleting Kubernetes Ingress and Helm releases..."
 echo "    (Crucial: This triggers AWS to cleanly delete the ALB before cluster teardown)"
 
-if kubectl get ingress -n travelease travelease &>/dev/null; then
-  echo "    Deleting Ingress 'travelease'..."
-  kubectl delete ingress travelease -n travelease --timeout=60s 2>/dev/null || true
-  echo "    Waiting 30s for AWS ALB Controller to delete the Load Balancer in AWS..."
-  sleep 30
-fi
+# Check and delete Ingress in the environment namespace ($MODE) and travelease
+for NS in "$MODE" travelease; do
+  if kubectl get ingress -n "$NS" travelease &>/dev/null; then
+    echo "    Deleting Ingress 'travelease' in namespace '$NS'..."
+    kubectl delete ingress travelease -n "$NS" --timeout=60s 2>/dev/null || true
+  fi
+  helm uninstall travelease -n "$NS" 2>/dev/null || true
+done
 
-# Uninstall all Helm releases across namespaces
-helm uninstall travelease -n travelease 2>/dev/null || true
+echo "    Waiting 30s for AWS ALB Controller to delete the Load Balancer in AWS..."
+sleep 30
+
+# Uninstall all cluster add-on Helm releases
 helm uninstall kube-prometheus-stack -n monitoring 2>/dev/null || true
 helm uninstall loki-stack -n monitoring 2>/dev/null || true
 helm uninstall metrics-server -n kube-system 2>/dev/null || true

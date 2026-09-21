@@ -58,7 +58,7 @@ data "aws_iam_policy_document" "github_assume_role" {
 
 resource "aws_iam_role" "ecr_push" {
   name               = "travelease-github-ecr-push"
-  description        = "GitHub Actions OIDC role — ECR image push only"
+  description        = "GitHub Actions OIDC role - ECR image push only"
   assume_role_policy = data.aws_iam_policy_document.github_assume_role.json
 
   tags = { ManagedBy = "terraform", Project = "travelease", Purpose = "github-oidc" }
@@ -109,7 +109,7 @@ resource "aws_iam_role_policy_attachment" "ecr_push" {
 
 resource "aws_iam_role" "dev_deploy" {
   name               = "travelease-github-dev-deploy"
-  description        = "GitHub Actions OIDC role — deploy to dev EKS cluster only"
+  description        = "GitHub Actions OIDC role - deploy to dev EKS cluster only"
   assume_role_policy = data.aws_iam_policy_document.github_assume_role.json
 
   tags = { ManagedBy = "terraform", Project = "travelease", Environment = "dev", Purpose = "github-oidc" }
@@ -147,7 +147,7 @@ resource "aws_iam_role_policy_attachment" "dev_deploy" {
 
 resource "aws_iam_role" "test_deploy" {
   name               = "travelease-github-test-deploy"
-  description        = "GitHub Actions OIDC role — deploy to test EKS cluster only"
+  description        = "GitHub Actions OIDC role - deploy to test EKS cluster only"
   assume_role_policy = data.aws_iam_policy_document.github_assume_role.json
 
   tags = { ManagedBy = "terraform", Project = "travelease", Environment = "test", Purpose = "github-oidc" }
@@ -185,7 +185,7 @@ resource "aws_iam_role_policy_attachment" "test_deploy" {
 
 resource "aws_iam_role" "prod_deploy" {
   name               = "travelease-github-prod-deploy"
-  description        = "GitHub Actions OIDC role — deploy to prod EKS cluster only (manual gate)"
+  description        = "GitHub Actions OIDC role - deploy to prod EKS cluster only (manual gate)"
   assume_role_policy = data.aws_iam_policy_document.github_assume_role.json
 
   tags = { ManagedBy = "terraform", Project = "travelease", Environment = "prod", Purpose = "github-oidc" }
