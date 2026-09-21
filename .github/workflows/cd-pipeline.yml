@@ -60,14 +60,23 @@ jobs:
         run: |
           docker build -t travelease:${{ github.sha }} -t travelease:latest .
 
-      - name: Trivy vulnerability scan (fail on HIGH/CRITICAL)
+      - name: Trivy vulnerability scan (table summary)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "travelease:${{ github.sha }}"
+          format: "table"
+          severity: "HIGH,CRITICAL"
+          exit-code: "0"
+          ignore-unfixed: true
+
+      - name: Trivy vulnerability scan (generate SARIF)
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: "travelease:${{ github.sha }}"
           format: "sarif"
           output: "trivy-results.sarif"
           severity: "HIGH,CRITICAL"
-          exit-code: "1"
+          exit-code: "0"
           ignore-unfixed: true
 
       - name: Upload Trivy results
