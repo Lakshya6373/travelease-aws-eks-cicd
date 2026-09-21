@@ -46,6 +46,9 @@ jobs:
     name: Docker Build + Trivy Scan + Push to ECR
     runs-on: ubuntu-latest
     needs: build-and-test
+    permissions:
+      id-token: write
+      contents: read
     outputs:
       image_tag: ${{ steps.set-tag.outputs.tag }}
     steps:
@@ -86,11 +89,17 @@ jobs:
           name: trivy-sarif
           path: trivy-results.sarif
 
+      - name: Inspect OIDC Token Claims
+        run: |
+          ID_TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
+          python3 -c "import sys, json, base64; token=sys.argv[1]; p=token.split('.')[1]; p+='='*(-len(p)%4); print('OIDC Token Claims:\n' + json.dumps(json.loads(base64.b64decode(p)), indent=2))" "$ID_TOKEN"
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.SHARED_ECR_PUSH_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
 
       - name: Login to Amazon ECR
         id: ecr-login
@@ -110,6 +119,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-push-image
     environment: dev
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -118,6 +130,7 @@ jobs:
         with:
           role-to-assume: ${{ vars.DEV_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
 
       - name: Update kubeconfig for dev cluster
         run: aws eks update-kubeconfig --name dev --region ${{ env.AWS_REGION }}
@@ -144,6 +157,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: deploy-dev
     environment: dev
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -152,6 +168,7 @@ jobs:
         with:
           role-to-assume: ${{ vars.DEV_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
 
       - name: Update kubeconfig for dev cluster
         run: aws eks update-kubeconfig --name dev --region ${{ env.AWS_REGION }}

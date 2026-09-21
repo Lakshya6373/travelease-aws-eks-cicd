@@ -11,9 +11,15 @@ data "tls_certificate" "github" {
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
+  url = "https://token.actions.githubusercontent.com"
+  client_id_list = [
+    "sts.amazonaws.com",
+    "https://github.com/Lakshya6373",
+    "https://github.com/lakshya6373"
+  ]
   thumbprint_list = [
+    "ab9d0263244dd0326eb67015705a667e79cfe998",
+    "cabd2a79a1076a31f21d253635cb039d4329a5e8",
     "6938fd4d98bab03faadb97b34396831e3780aea1",
     "1c58a3a8518e8759bf075b76b750d4f8d7383c4f"
   ]
@@ -52,7 +58,11 @@ data "aws_iam_policy_document" "github_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:aud"
-      values   = ["sts.amazonaws.com"]
+      values   = [
+        "sts.amazonaws.com",
+        "https://github.com/Lakshya6373",
+        "https://github.com/lakshya6373"
+      ]
     }
   }
 }
